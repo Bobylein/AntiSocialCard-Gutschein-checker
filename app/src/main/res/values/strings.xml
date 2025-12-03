@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gift Card Checker</string>
+    
+    <!-- Main Activity -->
+    <string name="select_market">Select Market</string>
+    <string name="start_scan">Scan Card</string>
+    <string name="market_rewe">REWE</string>
+    <string name="market_aldi">ALDI</string>
+    
+    <!-- Scanner Activity -->
+    <string name="scanner_title">Scan Barcode</string>
+    <string name="scanner_instruction">Point camera at the barcode on your gift card</string>
+    <string name="scanner_permission_denied">Camera permission is required to scan barcodes</string>
+    <string name="scanner_no_barcode">No barcode detected</string>
+    
+    <!-- PIN Entry Activity -->
+    <string name="pin_entry_title">Enter PIN</string>
+    <string name="pin_entry_instruction">Enter the PIN from your gift card</string>
+    <string name="pin_hint">PIN</string>
+    <string name="card_number_label">Card Number: %s</string>
+    <string name="use_ocr">Scan PIN with Camera</string>
+    <string name="enter_manually">Enter Manually</string>
+    <string name="continue_button">Continue</string>
+    <string name="ocr_instruction">Point camera at the PIN on your card</string>
+    <string name="ocr_detected">Detected: %s</string>
+    <string name="ocr_use_this">Use This PIN</string>
+    <string name="ocr_retry">Retry</string>
+    
+    <!-- Balance Check Activity -->
+    <string name="balance_check_title">Checking Balance</string>
+    <string name="balance_loading">Loading…</string>
+    <string name="balance_result">Balance: %s</string>
+    <string name="balance_error">Error checking balance</string>
+    <string name="balance_invalid_card">Invalid card number or PIN</string>
+    <string name="balance_network_error">Network error. Please check your connection.</string>
+    <string name="scan_another">Scan Another Card</string>
+    <string name="done">Done</string>
+    
+    <!-- Errors -->
+    <string name="error_generic">An error occurred</string>
+    <string name="error_camera">Camera error</string>
+    <string name="error_barcode_scan">Failed to scan barcode</string>
+    <string name="error_ocr">Failed to recognize text</string>
+</resources>
+

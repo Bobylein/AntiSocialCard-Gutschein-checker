@@ -1,0 +1,196 @@
+# Technical Documentation - AntiSocialCard-Checker
+
+## Overview
+
+AntiSocialCard-Checker is an Android application built with Kotlin that allows users to check gift card balances by scanning barcodes and entering PINs. The app uses WebView to interact with retailer balance check websites.
+
+## Technology Stack
+
+- **Language**: Kotlin 1.9.20
+- **Minimum SDK**: 24 (Android 7.0)
+- **Target SDK**: 34 (Android 14)
+- **Build System**: Gradle 8.2 with Kotlin DSL
+
+## Dependencies
+
+### Core Android
+- `androidx.core:core-ktx:1.12.0`
+- `androidx.appcompat:appcompat:1.6.1`
+- `com.google.android.material:material:1.11.0`
+- `androidx.constraintlayout:constraintlayout:2.1.4`
+
+### Camera & ML Kit
+- `androidx.camera:camera-camera2:1.3.1`
+- `androidx.camera:camera-lifecycle:1.3.1`
+- `androidx.camera:camera-view:1.3.1`
+- `com.google.mlkit:barcode-scanning:17.2.0`
+- `com.google.mlkit:text-recognition:16.0.0`
+
+### Async & Lifecycle
+- `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3`
+- `androidx.lifecycle:lifecycle-runtime-ktx:2.7.0`
+
+## Architecture
+
+### Activity Flow
+
+```
+MainActivity (Market Selection)
+    ↓
+ScannerActivity (Barcode Scanning)
+    ↓
+PinEntryActivity (PIN Entry/OCR)
+    ↓
+BalanceCheckActivity (WebView Balance Check)
+```
+
+### Data Models
+
+#### GiftCard
+```kotlin
+data class GiftCard(
+    val cardNumber: String,
+    val pin: String,
+    val marketType: MarketType,
+    val timestamp: Long
+)
+```
+
+#### BalanceResult
+```kotlin
+data class BalanceResult(
+    val status: BalanceStatus,
+    val balance: String?,
+    val currency: String,
+    val errorMessage: String?,
+    val rawResponse: String?,
+    val timestamp: Long
+)
+```
+
+### Market Abstraction
+
+The `Market` abstract class provides a template for implementing balance checks for different retailers:
+
+```kotlin
+abstract class Market {
+    abstract val marketType: MarketType
+    abstract val displayName: String
+    abstract val balanceCheckUrl: String
+    abstract val brandColor: Int
+    
+    abstract fun getFormFillScript(card: GiftCard): String
+    abstract fun getFormSubmitScript(): String
+    abstract fun getBalanceExtractionScript(): String
+    abstract fun parseBalanceResponse(response: String): BalanceResult
+    abstract fun isBalancePageLoaded(html: String): Boolean
+    abstract fun isErrorPageLoaded(html: String): Boolean
+}
+```
+
+## Implementation Details
+
+### Barcode Scanning (ScannerActivity)
+
+Uses CameraX with ML Kit Barcode Scanner:
+
+1. Initialize camera provider
+2. Bind Preview and ImageAnalysis use cases
+3. Process each frame with ML Kit BarcodeScanner
+4. Filter valid barcodes (8-25 digits)
+5. Display detected barcode for user confirmation
+
+### OCR PIN Capture (PinEntryActivity)
+
+Uses CameraX with ML Kit Text Recognition:
+
+1. Capture image on button press
+2. Process with TextRecognizer
+3. Extract potential PIN (4-8 digit sequences)
+4. Show detected text for user confirmation
+
+### WebView Balance Check (BalanceCheckActivity)
+
+1. Load retailer's balance check URL
+2. Wait for page load
+3. Inject JavaScript to fill form fields
+4. Submit form programmatically
+5. Monitor page changes
+6. Extract balance using JavaScript or HTML parsing
+7. Display result to user
+
+### JavaScript Injection
+
+Each market implementation provides JavaScript for:
+
+1. **Form Fill**: Locates input fields by various selectors (name, placeholder, label text)
+2. **Form Submit**: Finds and clicks submit button
+3. **Balance Extraction**: Parses page text for balance patterns
+
+Example pattern matching:
+```javascript
+var balancePatterns = [
+    /Guthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€/i,
+    /([0-9]+[,\.][0-9]{2})\s*€/,
+    /€\s*([0-9]+[,\.][0-9]{2})/
+];
+```
+
+## Market Implementations
+
+### REWE (ReweMarket)
+
+- **URL**: `https://kartenwelt.rewe.de/rewe-geschenkkarte.html`
+- **Fields**: Kartennummer (card number), PIN
+- **Brand Color**: #CC071E (Red)
+
+### ALDI Nord (AldiMarket)
+
+- **URL**: `https://www.helaba.com/de/aldi/`
+- **Fields**: Gutschein (19-digit), PIN (4-digit), CAPTCHA
+- **Brand Color**: #00529B (Blue)
+- **Note**: Requires manual CAPTCHA solving
+
+## Error Handling
+
+### Error Types
+
+- `BalanceStatus.SUCCESS`: Balance retrieved successfully
+- `BalanceStatus.INVALID_CARD`: Card number/PIN invalid
+- `BalanceStatus.NETWORK_ERROR`: Network connectivity issues
+- `BalanceStatus.PARSING_ERROR`: Failed to extract balance
+- `BalanceStatus.WEBSITE_CHANGED`: Website structure changed
+- `BalanceStatus.UNKNOWN_ERROR`: Unexpected error
+
+### Retry Logic
+
+- Form fill: Up to 5 attempts with 1-second delay
+- Balance extraction: 5-second timeout before error
+
+## Security Considerations
+
+- No card data stored locally
+- HTTPS enforced for WebView
+- Card numbers displayed masked (first/last 4 digits only)
+- ProGuard rules to keep sensitive classes
+
+## Testing
+
+### Manual Testing Checklist
+
+1. Camera permission handling
+2. Barcode scanning with various formats
+3. OCR accuracy for different PIN fonts
+4. WebView form filling
+5. Balance extraction accuracy
+6. Error state handling
+7. Network error recovery
+
+## Future Improvements
+
+- Add more market implementations
+- Local card history (encrypted)
+- Batch balance checking
+- Widget for quick balance check
+- Accessibility improvements
+
