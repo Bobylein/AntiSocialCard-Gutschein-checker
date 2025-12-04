@@ -1,6 +1,6 @@
 # AntiSocialCard-Checker
 
-An Android application for checking gift card balances by scanning barcodes and PINs. Currently supports REWE and ALDI Nord gift cards.
+An Android application for checking gift card balances by scanning barcodes and PINs. Currently supports REWE, ALDI Nord, and Lidl gift cards.
 
 ## Features
 
@@ -24,8 +24,9 @@ An Android application for checking gift card balances by scanning barcodes and 
 |--------|---------|-------------|------|
 | REWE | kartenwelt.rewe.de | Variable length barcode, PIN | Automatic |
 | ALDI Nord | helaba.com/de/aldi | 20-digit number, 4-digit PIN | Auto-fill* |
+| Lidl | lidl.de | 18-digit number, 4-digit PIN | Auto-fill* |
 
-*ALDI form fields are auto-filled. User must solve CAPTCHA and submit manually.
+*ALDI and Lidl form fields are auto-filled. User must solve CAPTCHA and submit manually.
 
 ## Requirements
 
@@ -59,7 +60,8 @@ app/
 │   └── markets/
 │       ├── Market.kt            # Abstract market class
 │       ├── ReweMarket.kt        # REWE implementation
-│       └── AldiMarket.kt        # ALDI implementation
+│       ├── AldiMarket.kt        # ALDI implementation
+│       └── LidlMarket.kt        # Lidl implementation
 ```
 
 ## Libraries Used
@@ -94,6 +96,12 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.4**: 
+  - Added Lidl gift card support
+  - Fixed long error messages in WebView (truncated to prevent UI issues)
+  - Optimized debug data collection (filters out navigation/cookie checkboxes)
+  - Improved JSON parsing with safety checks for large responses
+  - Lidl uses same form provider as ALDI (tx-gate.com) with direct iframe loading
 - **1.3**: 
   - Enhanced barcode scanning distance (2-3x improvement)
   - High-resolution image analysis (1920x1080) for better detection

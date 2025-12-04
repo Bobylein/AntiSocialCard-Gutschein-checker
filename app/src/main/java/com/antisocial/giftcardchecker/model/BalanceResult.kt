@@ -130,16 +130,27 @@ data class BalanceResult(
     
     /**
      * Returns a user-friendly error message.
+     * Truncates long error messages to prevent UI issues.
      */
     fun getDisplayMessage(): String {
+        val truncateMessage = { msg: String? ->
+            msg?.let {
+                if (it.length > 200) {
+                    it.take(200) + "..."
+                } else {
+                    it
+                }
+            }
+        }
+        
         return when (status) {
             BalanceStatus.SUCCESS -> "Balance: ${getFormattedBalance()}"
-            BalanceStatus.INVALID_CARD -> errorMessage ?: "Invalid card number"
-            BalanceStatus.INVALID_PIN -> errorMessage ?: "Invalid PIN"
-            BalanceStatus.NETWORK_ERROR -> errorMessage ?: "Network error"
-            BalanceStatus.PARSING_ERROR -> errorMessage ?: "Could not read balance"
-            BalanceStatus.WEBSITE_CHANGED -> errorMessage ?: "Service temporarily unavailable"
-            BalanceStatus.UNKNOWN_ERROR -> errorMessage ?: "An error occurred"
+            BalanceStatus.INVALID_CARD -> truncateMessage(errorMessage) ?: "Invalid card number"
+            BalanceStatus.INVALID_PIN -> truncateMessage(errorMessage) ?: "Invalid PIN"
+            BalanceStatus.NETWORK_ERROR -> truncateMessage(errorMessage) ?: "Network error"
+            BalanceStatus.PARSING_ERROR -> truncateMessage(errorMessage) ?: "Could not read balance"
+            BalanceStatus.WEBSITE_CHANGED -> truncateMessage(errorMessage) ?: "Service temporarily unavailable"
+            BalanceStatus.UNKNOWN_ERROR -> truncateMessage(errorMessage) ?: "An error occurred"
         }
     }
 }

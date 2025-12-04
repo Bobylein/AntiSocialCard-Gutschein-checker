@@ -298,6 +298,59 @@ class BalanceCheckActivity : AppCompatActivity() {
                     Log.d(TAG, "Page finished loading (main frame): $normalizedUrl")
                     processedUrls.add(normalizedUrl)
                     
+                    // Inject script to suppress/hide long error messages in webview (especially for Lidl)
+                    if (giftCard.marketType == com.antisocial.giftcardchecker.model.MarketType.LIDL) {
+                        view?.evaluateJavascript("""
+                            (function() {
+                                // Hide any error messages that might be displayed in the DOM
+                                function hideLongErrorMessages() {
+                                    var allElements = document.querySelectorAll('*');
+                                    for (var i = 0; i < allElements.length; i++) {
+                                        var el = allElements[i];
+                                        var text = el.textContent || el.innerText || '';
+                                        // Hide elements with very long error-like text (stack traces, etc.)
+                                        if (text.length > 500 && (
+                                            text.indexOf('Error') !== -1 ||
+                                            text.indexOf('error') !== -1 ||
+                                            text.indexOf('Exception') !== -1 ||
+                                            text.indexOf('at ') !== -1 || // Stack trace
+                                            text.indexOf('TypeError') !== -1 ||
+                                            text.indexOf('ReferenceError') !== -1
+                                        )) {
+                                            el.style.display = 'none';
+                                            el.style.visibility = 'hidden';
+                                        }
+                                    }
+                                }
+                                
+                                // Run immediately
+                                hideLongErrorMessages();
+                                
+                                // Also watch for new elements being added
+                                var observer = new MutationObserver(function(mutations) {
+                                    hideLongErrorMessages();
+                                });
+                                
+                                if (document.body) {
+                                    observer.observe(document.body, {
+                                        childList: true,
+                                        subtree: true
+                                    });
+                                } else {
+                                    document.addEventListener('DOMContentLoaded', function() {
+                                        hideLongErrorMessages();
+                                        if (document.body) {
+                                            observer.observe(document.body, {
+                                                childList: true,
+                                                subtree: true
+                                            });
+                                        }
+                                    });
+                                }
+                            })();
+                        """.trimIndent(), null)
+                    }
+                    
                     // If we're checking balance (form was submitted), extract balance instead of filling form
                     if (checkingBalance) {
                         Log.d(TAG, "Form was submitted, extracting balance from result page")
@@ -347,7 +400,13 @@ class BalanceCheckActivity : AppCompatActivity() {
                     
                     if (request?.isForMainFrame == true) {
                         Log.e(TAG, "Main frame error - showing error to user")
-                        showError(BalanceResult.networkError("Failed to load page: $errorDescription"))
+                        // Truncate long error descriptions
+                        val truncatedDesc = if (errorDescription.length > 200) {
+                            errorDescription.take(200) + "..."
+                        } else {
+                            errorDescription
+                        }
+                        showError(BalanceResult.networkError("Failed to load page: $truncatedDesc"))
                     }
                 }
                 
@@ -390,12 +449,21 @@ class BalanceCheckActivity : AppCompatActivity() {
                             ConsoleMessage.MessageLevel.WARNING -> Log.WARN
                             else -> Log.DEBUG
                         }
-                        android.util.Log.println(logLevel, TAG, "WebView Console [$level]: [${it.sourceId()}:${it.lineNumber()}] ${it.message()}")
                         
-                        // If it's an error and we're checking Lidl, log it prominently
+                        // Truncate long messages to prevent log spam (especially for Lidl)
+                        val messageText = it.message() ?: ""
+                        val truncatedMessage = if (messageText.length > 500) {
+                            messageText.take(500) + "... (truncated, ${messageText.length} chars total)"
+                        } else {
+                            messageText
+                        }
+                        
+                        android.util.Log.println(logLevel, TAG, "WebView Console [$level]: [${it.sourceId()}:${it.lineNumber()}] $truncatedMessage")
+                        
+                        // If it's an error and we're checking Lidl, log it prominently (truncated)
                         if (it.messageLevel() == ConsoleMessage.MessageLevel.ERROR && 
                             giftCard.marketType == com.antisocial.giftcardchecker.model.MarketType.LIDL) {
-                            Log.e(TAG, "LIDL JavaScript Error: ${it.message()} at ${it.sourceId()}:${it.lineNumber()}")
+                            Log.e(TAG, "LIDL JavaScript Error: $truncatedMessage at ${it.sourceId()}:${it.lineNumber()}")
                         }
                     }
                     return true
@@ -423,23 +491,34 @@ class BalanceCheckActivity : AppCompatActivity() {
         tabClickAttempts = 0
         processedUrls.clear() // Reset processed URLs
         
-        // For ALDI, navigate directly to the iframe URL (same as browser)
+        // For ALDI and Lidl, navigate directly to the iframe URL (same as browser)
         // This avoids the blank page issue and works immediately
-        val urlToLoad = if (market.marketType == com.antisocial.giftcardchecker.model.MarketType.ALDI) {
-            val iframeUrl = (market as? com.antisocial.giftcardchecker.markets.AldiMarket)?.iframeFormUrl
-            iframeUrl ?: market.balanceCheckUrl
-        } else {
-            market.balanceCheckUrl
+        val urlToLoad = when (market.marketType) {
+            com.antisocial.giftcardchecker.model.MarketType.ALDI -> {
+                val iframeUrl = (market as? com.antisocial.giftcardchecker.markets.AldiMarket)?.iframeFormUrl
+                iframeUrl ?: market.balanceCheckUrl
+            }
+            com.antisocial.giftcardchecker.model.MarketType.LIDL -> {
+                val iframeUrl = (market as? com.antisocial.giftcardchecker.markets.LidlMarket)?.iframeFormUrl
+                iframeUrl ?: market.balanceCheckUrl
+            }
+            else -> market.balanceCheckUrl
         }
         
         Log.d(TAG, "Loading balance check URL: $urlToLoad")
         
-        // For ALDI iframe URL, load with referrer header to prevent blank page
-        if (market.marketType == com.antisocial.giftcardchecker.model.MarketType.ALDI && 
+        // For ALDI and Lidl iframe URLs, load with referrer header to prevent blank page
+        if ((market.marketType == com.antisocial.giftcardchecker.model.MarketType.ALDI || 
+             market.marketType == com.antisocial.giftcardchecker.model.MarketType.LIDL) && 
             urlToLoad.contains("balancechecks.tx-gate.com")) {
             // Use loadUrl with additional headers (requires API 21+)
+            val referrer = when (market.marketType) {
+                com.antisocial.giftcardchecker.model.MarketType.ALDI -> "https://www.helaba.com/de/aldi/"
+                com.antisocial.giftcardchecker.model.MarketType.LIDL -> "https://www.lidl.de/c/lidl-geschenkkarten/s10007775"
+                else -> ""
+            }
             val headers = mapOf(
-                "Referer" to "https://www.helaba.com/de/aldi/",
+                "Referer" to referrer,
                 "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
                 "Accept-Language" to "de-DE,de;q=0.9,en;q=0.8"
             )
@@ -510,7 +589,24 @@ class BalanceCheckActivity : AppCompatActivity() {
                 }
                 
                 Log.d(TAG, "Cleaned result length: ${cleanedResult.length}")
-                if (cleanedResult.length > 1000) {
+                // Truncate very long results before parsing to prevent JSON parsing errors
+                if (cleanedResult.length > 50000) {
+                    Log.w(TAG, "Result is very long (${cleanedResult.length} chars), truncating before parsing")
+                    // Try to extract just the essential fields before the debug section gets too large
+                    val successMatch = Regex(""""success"\s*:\s*(true|false)""").find(cleanedResult)
+                    val cardFoundMatch = Regex(""""cardNumberFound"\s*:\s*(true|false)""").find(cleanedResult)
+                    val pinFoundMatch = Regex(""""pinFound"\s*:\s*(true|false)""").find(cleanedResult)
+                    
+                    if (successMatch != null && cardFoundMatch != null && pinFoundMatch != null) {
+                        // Reconstruct minimal JSON with just essential fields
+                        cleanedResult = """{"success":${successMatch.groupValues[1]},"cardNumberFound":${cardFoundMatch.groupValues[1]},"pinFound":${pinFoundMatch.groupValues[1]},"debug":{"url":"${market.balanceCheckUrl}","allInputs":[],"error":"result_truncated"}}"""
+                        Log.d(TAG, "Reconstructed minimal result: $cleanedResult")
+                    } else {
+                        // Fallback: truncate at safe point
+                        cleanedResult = cleanedResult.take(10000) + "...\"}"
+                        Log.w(TAG, "Truncated result to 10000 chars")
+                    }
+                } else if (cleanedResult.length > 1000) {
                     Log.d(TAG, "Cleaned result (first 500 chars): ${cleanedResult.take(500)}")
                 } else {
                     Log.d(TAG, "Cleaned result: $cleanedResult")
@@ -529,7 +625,13 @@ class BalanceCheckActivity : AppCompatActivity() {
                             showError(BalanceResult.error("JavaScript interface not available. Please try again."))
                         }
                         "javascript_error" -> {
-                            showError(BalanceResult.error("JavaScript error: $errorMessage"))
+                            // Truncate long error messages to prevent UI issues
+                            val truncatedError = if (errorMessage.length > 200) {
+                                errorMessage.take(200) + "..."
+                            } else {
+                                errorMessage
+                            }
+                            showError(BalanceResult.error("JavaScript error: $truncatedError"))
                         }
                         else -> {
                             showError(BalanceResult.error("Form fill error: $error"))
@@ -654,11 +756,11 @@ class BalanceCheckActivity : AppCompatActivity() {
                         // Continue retrying auto-fill in background
                     }
                     
-                    // For Lidl, wait longer as content might load dynamically
-                    val retryDelay = if (market.marketType == com.antisocial.giftcardchecker.model.MarketType.LIDL) {
-                        3000L // Wait 3 seconds for Lidl
-                    } else {
-                        2000L // 2 seconds for others
+                    // For ALDI and Lidl, wait longer as content might load dynamically
+                    val retryDelay = when (market.marketType) {
+                        com.antisocial.giftcardchecker.model.MarketType.ALDI -> 3000L // 3 seconds for ALDI main page (to allow tab click)
+                        com.antisocial.giftcardchecker.model.MarketType.LIDL -> 3000L // 3 seconds for Lidl (similar to ALDI)
+                        else -> 2000L // 2 seconds for others
                     }
 
                     if (pageLoadAttempts < MAX_ATTEMPTS) {
@@ -677,12 +779,16 @@ class BalanceCheckActivity : AppCompatActivity() {
                         showError(BalanceResult.websiteChanged(errorMsg))
                     }
                 }
-            } catch (e: Exception) {
-                isFillingForm = false // Reset flag on error
-                Log.e(TAG, "Error parsing form fill result", e)
-                Log.e(TAG, "Raw result was: $result")
-                showError(BalanceResult.error(e.message))
-            }
+                } catch (e: Exception) {
+                    isFillingForm = false // Reset flag on error
+                    Log.e(TAG, "Error parsing form fill result", e)
+                    Log.e(TAG, "Raw result was: $result")
+                    // Truncate long error messages
+                    val errorMsg = e.message?.let { msg ->
+                        if (msg.length > 200) msg.take(200) + "..." else msg
+                    } ?: "An error occurred"
+                    showError(BalanceResult.error(errorMsg))
+                }
         }
     }
 
@@ -1411,7 +1517,11 @@ class BalanceCheckActivity : AppCompatActivity() {
                     showResult(result)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing balance result JSON: $jsonString", e)
-                    showError(BalanceResult.error("Error parsing result: ${e.message}"))
+                    // Truncate long error messages
+                    val errorMsg = e.message?.let { msg ->
+                        if (msg.length > 200) msg.take(200) + "..." else msg
+                    } ?: "Error parsing result"
+                    showError(BalanceResult.error(errorMsg))
                 }
             }
         }
