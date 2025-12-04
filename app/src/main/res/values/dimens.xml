@@ -18,6 +18,8 @@
     
     <!-- Scanner -->
     <dimen name="scanner_frame_size">280dp</dimen>
+    <dimen name="scanner_frame_width">320dp</dimen>
+    <dimen name="scanner_frame_height">120dp</dimen>
     <dimen name="scanner_frame_corner_radius">24dp</dimen>
     <dimen name="scanner_frame_stroke">4dp</dimen>
     

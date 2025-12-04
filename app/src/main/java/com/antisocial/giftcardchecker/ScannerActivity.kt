@@ -197,18 +197,18 @@ class ScannerActivity : AppCompatActivity() {
         
         // Update button text if we have both
         if (detectedBarcode != null && detectedPin != null) {
-            binding.btnUseBarcode.text = "Weiter mit Barcode und PIN"
+            binding.btnUseBarcode.text = "Daten überprüfen"
         } else if (detectedBarcode != null) {
-            binding.btnUseBarcode.text = "Weiter mit Barcode"
+            binding.btnUseBarcode.text = "Daten überprüfen"
         }
     }
     
     private fun checkAndNavigate() {
         if (autoNavigateEnabled && detectedBarcode != null && detectedPin != null) {
-            // Auto-navigate after a short delay to show the user what was detected
+            // Auto-navigate to confirmation screen after a short delay
             handler.postDelayed({
                 if (autoNavigateEnabled) {
-                    navigateToBalanceCheck()
+                    navigateToConfirmation()
                 }
             }, 1500) // 1.5 second delay
         }
@@ -226,7 +226,7 @@ class ScannerActivity : AppCompatActivity() {
         }
     }
 
-    private fun navigateToBalanceCheck() {
+    private fun navigateToConfirmation() {
         val cardNumber = detectedBarcode ?: ""
         val pin = detectedPin ?: ""
         
@@ -235,17 +235,17 @@ class ScannerActivity : AppCompatActivity() {
             return
         }
         
-        val giftCard = GiftCard(
-            cardNumber = cardNumber,
-            pin = pin,
-            marketType = marketType
-        )
-        
-        val intent = Intent(this, BalanceCheckActivity::class.java).apply {
-            putExtra(GiftCard.EXTRA_GIFT_CARD, giftCard)
+        val intent = Intent(this, ConfirmationActivity::class.java).apply {
+            putExtra(GiftCard.EXTRA_CARD_NUMBER, cardNumber)
+            putExtra(GiftCard.EXTRA_PIN, pin)
+            putExtra(GiftCard.EXTRA_MARKET_TYPE, marketType)
         }
         startActivity(intent)
         finish()
+    }
+    
+    private fun navigateToBalanceCheck() {
+        navigateToConfirmation()
     }
 
     override fun onDestroy() {

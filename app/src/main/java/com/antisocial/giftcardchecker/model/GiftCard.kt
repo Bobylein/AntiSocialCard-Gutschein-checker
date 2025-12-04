@@ -25,6 +25,7 @@ data class GiftCard(
     companion object {
         const val EXTRA_GIFT_CARD = "extra_gift_card"
         const val EXTRA_CARD_NUMBER = "extra_card_number"
+        const val EXTRA_PIN = "extra_pin"
         const val EXTRA_MARKET_TYPE = "extra_market_type"
     }
     

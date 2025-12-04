@@ -58,11 +58,11 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/scannerFrame" />
 
-    <!-- Scanner frame -->
+    <!-- Scanner frame - länglich für Barcode -->
     <View
         android:id="@+id/scannerFrame"
-        android:layout_width="@dimen/scanner_frame_size"
-        android:layout_height="@dimen/scanner_frame_size"
+        android:layout_width="@dimen/scanner_frame_width"
+        android:layout_height="@dimen/scanner_frame_height"
         android:background="@drawable/scanner_frame"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
