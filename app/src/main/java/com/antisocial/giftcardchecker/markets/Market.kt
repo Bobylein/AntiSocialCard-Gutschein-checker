@@ -94,6 +94,7 @@ abstract class Market {
             return when (type) {
                 MarketType.REWE -> ReweMarket()
                 MarketType.ALDI -> AldiMarket()
+                MarketType.LIDL -> LidlMarket()
             }
         }
         
@@ -101,7 +102,7 @@ abstract class Market {
          * Returns all available market implementations.
          */
         fun getAllMarkets(): List<Market> {
-            return listOf(ReweMarket(), AldiMarket())
+            return listOf(ReweMarket(), AldiMarket(), LidlMarket())
         }
     }
 }

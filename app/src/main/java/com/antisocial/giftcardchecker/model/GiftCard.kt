@@ -8,7 +8,8 @@ import kotlinx.parcelize.Parcelize
  */
 enum class MarketType {
     REWE,
-    ALDI
+    ALDI,
+    LIDL
 }
 
 /**
@@ -51,6 +52,7 @@ data class GiftCard(
         return when (marketType) {
             MarketType.REWE -> cardNumber.length in 13..19 && cardNumber.all { it.isDigit() }
             MarketType.ALDI -> cardNumber.length == 19 && cardNumber.all { it.isDigit() }
+            MarketType.LIDL -> cardNumber.length == 20 && cardNumber.all { it.isDigit() }
         }
     }
     
@@ -61,6 +63,7 @@ data class GiftCard(
         return when (marketType) {
             MarketType.REWE -> pin.length in 4..8 && pin.all { it.isDigit() || it.isLetter() }
             MarketType.ALDI -> pin.length == 4 && pin.all { it.isDigit() }
+            MarketType.LIDL -> pin.length == 4 && pin.all { it.isDigit() }
         }
     }
 }

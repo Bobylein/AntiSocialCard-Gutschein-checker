@@ -45,6 +45,11 @@ class MainActivity : AppCompatActivity() {
             preloadAldiPage()
             startScanner(MarketType.ALDI)
         }
+
+        // Lidl card click
+        binding.cardLidl.setOnClickListener {
+            startScanner(MarketType.LIDL)
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")

@@ -15,3 +15,4 @@
 -keep class com.antisocial.giftcardchecker.model.** { *; }
 
 
+
