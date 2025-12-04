@@ -400,10 +400,11 @@ REWE gift cards require landscape card orientation to scan the barcode, but the 
   - In landscape mode: gap applied horizontally (between barcode left and PIN region right)
   - Improves PIN detection accuracy by avoiding barcode interference
 - **ALDI Corner-Focused Detection**:
-  - Dedicated ALDI case with Lidl-style corner positioning
+  - Dedicated ALDI case with Lidl-style corner positioning (mirrored for left side)
   - Extended search region (2x width and height)
-  - No overlap with barcode area - PIN region starts from barcode right edge and ends at barcode top
-  - Improved PIN detection by focusing on actual corner location
+  - PIN region positioned in upper-left corner - starts from left of barcode and extends leftward
+  - No overlap with barcode area - PIN region ends at barcode left edge and top
+  - Improved PIN detection by focusing on actual corner location (upper-left instead of upper-right)
 
 ### v1.8 - Simplified Main Screen UI
 - **Redesigned Main Screen**:
