@@ -98,6 +98,13 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.9**:
+  - **Fixed ALDI PIN Detection Box Positioning**:
+    - Enhanced coordinate transformation in `updateHighlights()` function
+    - Improved logging for debugging overlay positioning issues
+    - Fixed PIN detection box appearing below barcode when it should be above
+    - Better handling of coordinate transformation from ML Kit space to preview view space
+    - Added comprehensive debug logging to track coordinate transformations
 - **1.8**:
   - **Simplified Main Screen UI**:
     - Redesigned main screen to show three large logos (REWE, ALDI, Lidl) without additional explanations

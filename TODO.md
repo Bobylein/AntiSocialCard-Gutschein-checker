@@ -24,6 +24,7 @@
 
 - [x] **ALDI cross-origin iframe** - Fixed: Now navigates directly to iframe URL with referrer header, auto-fills form fields
 - [x] **REWE rotation handling** - Fixed: PIN search region now rotation-aware, handles portrait phone + landscape card orientation
+- [x] **ALDI PIN detection box positioning** - Fixed: Enhanced coordinate transformation, PIN box now correctly positioned above barcode
 - [ ] **ALDI CAPTCHA** - ALDI balance check requires manual CAPTCHA solving and form submission (by design)
 - [ ] **Website changes** - JavaScript selectors may break if retailers update their websites
 - [ ] **OCR accuracy** - PIN OCR may not work well with unusual fonts or low-quality images

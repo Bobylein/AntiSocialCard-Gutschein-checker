@@ -115,8 +115,10 @@ Uses CameraX with ML Kit Barcode Scanner with enhanced distance scanning:
 4. **Visual Feedback**:
    - RED highlight overlay shows expected barcode search region
    - BLUE highlight overlay shows expected PIN search region
-   - Coordinate conversion from image space to screen space
-   - Highlights positioned relative to preview view
+   - Coordinate conversion from ML Kit coordinate system to preview view coordinates
+   - Accounts for display rotation, aspect ratio differences, and letterboxing/pillarboxing
+   - Highlights positioned relative to preview view using accurate transformation
+   - Enhanced debug logging tracks coordinate transformations for troubleshooting
    - Helps users position the gift card correctly
 
 5. **User Interaction**:
@@ -379,6 +381,25 @@ REWE gift cards require landscape card orientation to scan the barcode, but the 
   - Large, bold text logos (48sp) centered on each card
   - Clean, minimalist interface focusing on market selection
   - Cards maintain click handlers and navigation functionality
+
+### v1.9 - Fixed ALDI PIN Detection Box Positioning
+- **Coordinate Transformation Improvements**:
+  - Enhanced `updateHighlights()` function with better coordinate transformation logic
+  - Improved handling of ML Kit coordinate system to preview view coordinate system mapping
+  - Fixed issue where PIN detection box appeared below barcode when it should be above
+  - Better accounting for display rotation and aspect ratio differences
+  - Refactored coordinate transformation into helper function for maintainability
+- **Debug Logging**:
+  - Added comprehensive debug logging for PIN overlay positioning
+  - Logs show barcode and PIN overlay positions in both ML Kit and preview coordinates
+  - Tracks transformation parameters (scale, offset, rotation) for debugging
+  - Helps identify coordinate system mismatches between detection and display
+- **Technical Details**:
+  - ML Kit coordinates are in display-corrected space (rotation applied)
+  - PreviewView automatically handles rotation but uses FIT_CENTER scaling
+  - Coordinate transformation accounts for letterboxing/pillarboxing
+  - Scale factors calculated based on aspect ratio differences
+  - Proper offset calculation for centered image display
 
 ## Future Improvements
 
