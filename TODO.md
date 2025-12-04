@@ -34,7 +34,7 @@
 - [ ] Add unit tests for Market implementations
 - [ ] Add UI tests for main flows
 - [ ] Implement ViewModel + LiveData for better lifecycle handling
-- [ ] Add Hilt/Dagger for dependency injection
+- [x] Add Hilt/Dagger for dependency injection
 - [ ] Create custom scanner overlay drawable
 
 ## Completed
@@ -57,4 +57,8 @@
 - [x] ALDI page preloading in MainActivity to reduce blank page issues
 - [x] CAPTCHA field focus with retry mechanism and keyboard opening
 - [x] Native Android touch simulation for reliable CAPTCHA field focus and keyboard opening
+- [x] Add Hilt/Dagger for dependency injection
+- [x] Intent API compatibility utilities for deprecated methods
+- [x] ProGuard configuration for release builds
+- [x] Build configuration with debug/release variants
 

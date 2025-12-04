@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import com.antisocial.giftcardchecker.databinding.ActivityPinEntryBinding
 import com.antisocial.giftcardchecker.model.GiftCard
 import com.antisocial.giftcardchecker.model.MarketType
+import com.antisocial.giftcardchecker.utils.getSerializableExtraCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
@@ -58,7 +59,7 @@ class PinEntryActivity : AppCompatActivity() {
 
         // Get data from intent
         cardNumber = intent.getStringExtra(GiftCard.EXTRA_CARD_NUMBER) ?: ""
-        marketType = intent.getSerializableExtra(GiftCard.EXTRA_MARKET_TYPE) as? MarketType
+        marketType = intent.getSerializableExtraCompat<MarketType>(GiftCard.EXTRA_MARKET_TYPE)
             ?: MarketType.REWE
 
         setupTextRecognizer()

@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import com.antisocial.giftcardchecker.databinding.ActivityScannerBinding
 import com.antisocial.giftcardchecker.model.GiftCard
 import com.antisocial.giftcardchecker.model.MarketType
+import com.antisocial.giftcardchecker.utils.getSerializableExtraCompat
 import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -95,12 +96,8 @@ class ScannerActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Get market type from intent
-        marketType = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            intent.getSerializableExtra(GiftCard.EXTRA_MARKET_TYPE, MarketType::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getSerializableExtra(GiftCard.EXTRA_MARKET_TYPE) as? MarketType
-        } ?: MarketType.REWE
+        marketType = intent.getSerializableExtraCompat<MarketType>(GiftCard.EXTRA_MARKET_TYPE)
+            ?: MarketType.REWE
 
         setupBarcodeScanner()
         setupUI()

@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.antisocial.giftcardchecker.markets.Market
 import com.antisocial.giftcardchecker.model.GiftCard
 import com.antisocial.giftcardchecker.model.MarketType
+import com.antisocial.giftcardchecker.utils.getSerializableExtraCompat
 
 /**
  * Activity for confirming and editing scanned gift card data before checking balance.
@@ -24,7 +25,7 @@ class ConfirmationActivity : AppCompatActivity() {
         // Get data from intent
         val cardNumber = intent.getStringExtra(GiftCard.EXTRA_CARD_NUMBER) ?: ""
         val pin = intent.getStringExtra(GiftCard.EXTRA_PIN) ?: ""
-        marketType = intent.getSerializableExtra(GiftCard.EXTRA_MARKET_TYPE) as? MarketType
+        marketType = intent.getSerializableExtraCompat<MarketType>(GiftCard.EXTRA_MARKET_TYPE)
             ?: MarketType.REWE
 
         // Validate data
