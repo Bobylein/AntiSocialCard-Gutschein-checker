@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,6 +10,13 @@ plugins {
 android {
     namespace = "com.antisocial.giftcardchecker"
     compileSdk = 34
+
+    // Load keystore properties for signing
+    val keystorePropertiesFile = rootProject.file("app/keystore.properties")
+    val keystoreProperties = Properties()
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    }
 
     defaultConfig {
         applicationId = "com.antisocial.giftcardchecker"
@@ -18,8 +28,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                null
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -74,9 +100,6 @@ dependencies {
     
     // HTTP Client for direct form submission
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    
-    // ONNX Runtime for ML model inference
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
     
     // Testing
     testImplementation("junit:junit:4.13.2")
