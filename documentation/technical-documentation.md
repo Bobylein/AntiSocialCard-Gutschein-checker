@@ -213,6 +213,10 @@ var balancePatterns = [
 - **Card Types**:
   - **TYPE_1**: Standard barcode - uses last 13 digits of scanned code
   - **TYPE_2**: Aztec barcode - uses first 13 digits of scanned code
+- **Performance Optimization**:
+  - Image blocking: All images are blocked except captcha images to reduce page load time
+  - Captcha images are identified by URL patterns (captcha, security, verify, challenge, recaptcha, hcaptcha, turnstile)
+  - Blocked images return empty responses to prevent unnecessary network requests
 
 ### ALDI Nord (AldiMarket)
 
