@@ -14,11 +14,15 @@ import android.view.View
 import android.webkit.*
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.antisocial.giftcardchecker.databinding.ActivityBalanceCheckBinding
 import com.antisocial.giftcardchecker.markets.Market
+import com.antisocial.giftcardchecker.model.BalanceCheckState
 import com.antisocial.giftcardchecker.model.BalanceResult
 import com.antisocial.giftcardchecker.model.BalanceStatus
 import com.antisocial.giftcardchecker.model.GiftCard
+import com.antisocial.giftcardchecker.utils.StateManager
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -31,12 +35,10 @@ class BalanceCheckActivity : AppCompatActivity() {
     private lateinit var binding: ActivityBalanceCheckBinding
     private lateinit var giftCard: GiftCard
     private lateinit var market: Market
-    
+
     private val handler = Handler(Looper.getMainLooper())
+    private val stateManager = StateManager(TAG)
     private var pageLoadAttempts = 0
-    private var formFilled = false
-    private var checkingBalance = false
-    private var isFillingForm = false
     private var tabClickAttempts = 0
     private val MAX_TAB_CLICK_ATTEMPTS = 5
     private val processedUrls = mutableSetOf<String>()
@@ -64,15 +66,69 @@ class BalanceCheckActivity : AppCompatActivity() {
 
         setupUI()
         setupWebView()
+        observeState()
 
         // Check network connectivity before loading
         if (!isNetworkAvailable()) {
-            showError(BalanceResult.networkError("Keine Internetverbindung"))
+            stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.networkError("Keine Internetverbindung")))
             return
         }
 
         // Always use auto-fill - manual entry is not acceptable
         loadBalanceCheckPage()
+    }
+
+    /**
+     * Observes state changes and updates UI accordingly
+     */
+    private fun observeState() {
+        lifecycleScope.launch {
+            stateManager.state.collect { state ->
+                Log.d(TAG, "State changed to: $state")
+                updateUI(state)
+            }
+        }
+    }
+
+    /**
+     * Updates the entire UI based on the current state
+     */
+    private fun updateUI(state: BalanceCheckState) {
+        when (state) {
+            is BalanceCheckState.Loading -> {
+                showLoading(true)
+                binding.webView.visibility = View.GONE
+                binding.resultCard.visibility = View.GONE
+                binding.tvCaptchaInstruction.visibility = View.GONE
+                binding.buttonsLayout.visibility = View.GONE
+            }
+            is BalanceCheckState.FillingForm -> {
+                showLoading(true)
+                binding.tvLoadingText.text = "Formular wird ausgefüllt (Versuch ${state.attemptNumber})..."
+            }
+            is BalanceCheckState.WaitingForCaptcha -> {
+                showLoading(false)
+                binding.webView.visibility = View.VISIBLE
+                binding.tvCaptchaInstruction.visibility = View.VISIBLE
+                binding.tvCaptchaInstruction.text =
+                    "Die Gutscheinnummer und PIN wurden automatisch ausgefüllt.\n\n" +
+                    "Bitte lösen Sie das CAPTCHA und klicken Sie dann auf 'Guthabenabfrage'."
+                binding.buttonsLayout.visibility = View.VISIBLE
+                binding.btnScanAnother.text = "Fertig"
+                binding.btnScanAnother.setOnClickListener { finish() }
+            }
+            is BalanceCheckState.CheckingBalance -> {
+                showLoading(true)
+                binding.tvLoadingText.text = "Guthaben wird abgerufen..."
+                binding.tvCaptchaInstruction.visibility = View.GONE
+            }
+            is BalanceCheckState.Success -> {
+                showResult(state.result)
+            }
+            is BalanceCheckState.Error -> {
+                showError(state.result)
+            }
+        }
     }
     
 
@@ -215,7 +271,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                         Log.d(TAG, "Navigation requested to: $url")
                         
                         // Prevent navigation if we've already processed this URL and form is filled
-                        if (processedUrls.contains(url) && formFilled) {
+                        if (processedUrls.contains(url) && stateManager.currentState.isWaitingForCaptcha()) {
                             Log.d(TAG, "Preventing navigation to already processed URL: $url")
                             return true // Block navigation
                         }
@@ -236,11 +292,11 @@ class BalanceCheckActivity : AppCompatActivity() {
                     // But only if it's a different URL
                     if (url != null) {
                         val normalizedUrl = url.split("#").firstOrNull()?.trimEnd('/') ?: url.trimEnd('/')
-                        if (!processedUrls.any { 
+                        if (!processedUrls.any {
                             val processedNormalized = it.split("#").firstOrNull()?.trimEnd('/') ?: it.trimEnd('/')
-                            processedNormalized == normalizedUrl 
+                            processedNormalized == normalizedUrl
                         }) {
-                            isFillingForm = false
+                            // URL changed to a new page - state will be managed by state machine
                         }
                     }
                     
@@ -405,7 +461,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                     }
                     
                     // If we're checking balance (form was submitted), extract balance instead of filling form
-                    if (checkingBalance) {
+                    if (stateManager.currentState.isCheckingBalance()) {
                         Log.d(TAG, "Form was submitted, extracting balance from result page")
                         handler.postDelayed({
                             extractBalance()
@@ -420,7 +476,8 @@ class BalanceCheckActivity : AppCompatActivity() {
                         Log.d(TAG, "Loaded iframe URL directly (same as browser), will fill form")
                     }
                     
-                    if (!formFilled && !isFillingForm) {
+                    val currentState = stateManager.currentState
+                    if (!currentState.isWaitingForCaptcha() && !currentState.isFillingForm() && !currentState.isTerminal()) {
                         // Wait for form to be fully loaded and rendered
                         // The ALDI form might need more time to initialize, especially if it uses JavaScript
                         // REWE may need more time after image blocking optimizations
@@ -431,13 +488,13 @@ class BalanceCheckActivity : AppCompatActivity() {
                             market.marketType == com.antisocial.giftcardchecker.model.MarketType.REWE -> 3000L // 3 seconds for REWE (page may need time to render)
                             else -> 2000L // 2 seconds for others
                         }
-                        
+
                         Log.d(TAG, "Waiting $waitTime ms before filling form")
                         handler.postDelayed({
                             fillFormFields()
                         }, waitTime)
                     } else {
-                        Log.d(TAG, "Skipping fillFormFields - formFilled=$formFilled, isFillingForm=$isFillingForm")
+                        Log.d(TAG, "Skipping fillFormFields - currentState=$currentState")
                     }
                 }
 
@@ -461,7 +518,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                         } else {
                             errorDescription
                         }
-                        showError(BalanceResult.networkError("Failed to load page: $truncatedDesc"))
+                        stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.networkError("Failed to load page: $truncatedDesc")))
                     }
                 }
                 
@@ -477,7 +534,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                     
                     if (request?.isForMainFrame == true && statusCode >= 400) {
                         Log.e(TAG, "Main frame HTTP error - showing error to user")
-                        showError(BalanceResult.networkError("HTTP error $statusCode"))
+                        stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.networkError("HTTP error $statusCode")))
                     }
                 }
             }
@@ -539,9 +596,7 @@ class BalanceCheckActivity : AppCompatActivity() {
     }
 
     private fun loadBalanceCheckPage() {
-        showLoading(true)
-        formFilled = false
-        isFillingForm = false
+        stateManager.transitionTo(BalanceCheckState.Loading)
         pageLoadAttempts = 0
         tabClickAttempts = 0
         processedUrls.clear() // Reset processed URLs
@@ -585,20 +640,26 @@ class BalanceCheckActivity : AppCompatActivity() {
     }
 
     private fun fillFormFields() {
-        if (formFilled) {
-            Log.d(TAG, "Form already filled, skipping")
+        val currentState = stateManager.currentState
+
+        // Skip if form already filled or currently filling
+        if (currentState is BalanceCheckState.WaitingForCaptcha ||
+            currentState is BalanceCheckState.CheckingBalance ||
+            currentState.isTerminal()) {
+            Log.d(TAG, "Form already filled or terminal state, skipping (current: $currentState)")
             return
         }
-        
-        if (isFillingForm) {
+
+        if (currentState.isFillingForm()) {
             Log.d(TAG, "Already filling form, skipping duplicate call")
             return
         }
-        
+
         // Always use auto-fill - manual entry is not acceptable
-        
-        isFillingForm = true
-        Log.d(TAG, "Filling form fields...")
+
+        val attemptNumber = pageLoadAttempts + 1
+        stateManager.transitionTo(BalanceCheckState.FillingForm(attemptNumber))
+        Log.d(TAG, "Filling form fields (attempt $attemptNumber)...")
         Log.d(TAG, "Current URL: ${binding.webView.url}")
         
         // First, check if page is ready and has content
@@ -639,7 +700,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                     cleanedResult = cleanedResult.trim()
                 } else {
                     Log.e(TAG, "Empty result from JavaScript")
-                    showError(BalanceResult.error("Empty response from form fill script"))
+                    stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.error("Empty response from form fill script")))
                     return@evaluateJavascript
                 }
                 
@@ -677,7 +738,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                     
                     when (error) {
                         "android_interface_not_available" -> {
-                            showError(BalanceResult.error("JavaScript interface not available. Please try again."))
+                            stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.error("JavaScript interface not available. Please try again.")))
                         }
                         "javascript_error" -> {
                             // Truncate long error messages to prevent UI issues
@@ -686,13 +747,12 @@ class BalanceCheckActivity : AppCompatActivity() {
                             } else {
                                 errorMessage
                             }
-                            showError(BalanceResult.error("JavaScript error: $truncatedError"))
+                            stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.error("JavaScript error: $truncatedError")))
                         }
                         else -> {
-                            showError(BalanceResult.error("Form fill error: $error"))
+                            stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.error("Form fill error: $error")))
                         }
                     }
-                    isFillingForm = false
                     return@evaluateJavascript
                 }
                 
@@ -704,7 +764,8 @@ class BalanceCheckActivity : AppCompatActivity() {
                     tabClickAttempts++
                     if (tabClickAttempts < MAX_TAB_CLICK_ATTEMPTS) {
                         Log.d(TAG, "Tab clicked but iframe not loaded yet, waiting and retrying... (attempt $tabClickAttempts/$MAX_TAB_CLICK_ATTEMPTS)")
-                        isFillingForm = false // Reset flag to allow retry
+                        // State will transition back to Loading and retry
+                        stateManager.transitionTo(BalanceCheckState.Loading)
                         handler.postDelayed({
                             fillFormFields()
                         }, 2000) // Wait 2 seconds for iframe to load
@@ -749,30 +810,13 @@ class BalanceCheckActivity : AppCompatActivity() {
                 Log.d(TAG, "Gutschein found: ${json.optBoolean("gutscheinFound")}")
                 Log.d(TAG, "PIN found: ${json.optBoolean("pinFound")}")
                 Log.d(TAG, "CAPTCHA found: ${json.optBoolean("captchaFound")}")
-                
+
                 if (success) {
-                    formFilled = true
-                    isFillingForm = false
-                    
-                    // Fields filled successfully - show the form to user
-                    // User will submit manually after entering CAPTCHA
-                    
-                    showLoading(false)
-                    binding.webView.visibility = View.VISIBLE
-                    binding.tvCaptchaInstruction.visibility = View.VISIBLE
-                    binding.tvCaptchaInstruction.text = 
-                        "Die Gutscheinnummer und PIN wurden automatisch ausgefüllt.\n\n" +
-                        "Bitte lösen Sie das CAPTCHA und klicken Sie dann auf 'Guthabenabfrage'."
-                    
-                    // Show buttons
-                    binding.buttonsLayout.visibility = View.VISIBLE
-                    binding.btnScanAnother.text = "Fertig"
-                    binding.btnScanAnother.setOnClickListener {
-                        finish()
-                    }
-                    
+                    // Fields filled successfully - transition to waiting for CAPTCHA
+                    stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
+
                     Log.d(TAG, "Form fields filled successfully. User will submit manually after entering CAPTCHA.")
-                    
+
                     // Try to focus CAPTCHA field from Android side as well (backup to JavaScript focus)
                     handler.postDelayed({
                         focusCaptchaField()
@@ -780,7 +824,6 @@ class BalanceCheckActivity : AppCompatActivity() {
                 } else {
                     // Form fields not found, retry with longer delay
                     pageLoadAttempts++
-                    isFillingForm = false // Reset flag to allow retry
                     
                     val inputCount = json.optJSONObject("debug")?.optJSONArray("allInputs")?.length() ?: 0
                     val iframeFound = json.optJSONObject("debug")?.optBoolean("iframeFound") ?: false
@@ -832,18 +875,17 @@ class BalanceCheckActivity : AppCompatActivity() {
                             "Form fields not found. Found $inputCount input fields but couldn't identify card number/PIN fields."
                         }
                         Log.w(TAG, errorMsg)
-                        showError(BalanceResult.websiteChanged(errorMsg))
+                        stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.websiteChanged(errorMsg)))
                     }
                 }
                 } catch (e: Exception) {
-                    isFillingForm = false // Reset flag on error
                     Log.e(TAG, "Error parsing form fill result", e)
                     Log.e(TAG, "Raw result was: $result")
                     // Truncate long error messages
                     val errorMsg = e.message?.let { msg ->
                         if (msg.length > 200) msg.take(200) + "..." else msg
                     } ?: "An error occurred"
-                    showError(BalanceResult.error(errorMsg))
+                    stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.error(errorMsg)))
                 }
         }
     }
@@ -1208,15 +1250,19 @@ class BalanceCheckActivity : AppCompatActivity() {
     }
 
     private fun submitForm() {
-        if (checkingBalance) return
-        checkingBalance = true
-        
+        if (stateManager.currentState.isCheckingBalance()) {
+            Log.d(TAG, "Already checking balance, skipping duplicate submit")
+            return
+        }
+
+        stateManager.transitionTo(BalanceCheckState.CheckingBalance)
+
         Log.d(TAG, "Submitting form...")
         val script = market.getFormSubmitScript()
-        
+
         binding.webView.evaluateJavascript(script) { result ->
             Log.d(TAG, "Form submit result: $result")
-            
+
             // Wait for page to load/update, then extract balance
             handler.postDelayed({
                 extractBalance()
@@ -1226,30 +1272,31 @@ class BalanceCheckActivity : AppCompatActivity() {
 
     private fun extractBalance() {
         Log.d(TAG, "Extracting balance...")
-        
+
         // Get the page HTML and check for balance
         binding.webView.evaluateJavascript(
             "(function() { return document.body.innerText; })();"
         ) { result ->
             val pageText = result.trim('"').replace("\\n", "\n").replace("\\\"", "\"")
             Log.d(TAG, "Page text length: ${pageText.length}")
-            
+
             // Parse the response using market-specific logic
             val balanceResult = market.parseBalanceResponse(pageText)
-            
+
             if (balanceResult.isSuccess()) {
-                showResult(balanceResult)
+                stateManager.transitionTo(BalanceCheckState.Success(balanceResult))
             } else if (market.isErrorPageLoaded(pageText)) {
-                showError(BalanceResult.invalidCard())
+                stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.invalidCard()))
             } else {
                 // Try JavaScript extraction
                 val extractScript = market.getBalanceExtractionScript()
                 binding.webView.evaluateJavascript(extractScript, null)
-                
+
                 // If no callback received within timeout, show error
                 handler.postDelayed({
-                    if (binding.resultCard.visibility != View.VISIBLE) {
-                        showError(BalanceResult.parsingError("Could not extract balance"))
+                    if (stateManager.currentState !is BalanceCheckState.Success &&
+                        stateManager.currentState !is BalanceCheckState.Error) {
+                        stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.parsingError("Could not extract balance")))
                     }
                 }, 5000)
             }
@@ -1281,13 +1328,13 @@ class BalanceCheckActivity : AppCompatActivity() {
     }
 
     private fun showResult(result: BalanceResult) {
-        checkingBalance = false // Reset checking flag
+        // State transition handled by caller
         showLoading(false)
         binding.webView.visibility = View.GONE
         binding.resultCard.visibility = View.VISIBLE
         binding.buttonsLayout.visibility = View.VISIBLE
         binding.tvCaptchaInstruction.visibility = View.GONE
-        
+
         // Reset button
         binding.btnScanAnother.text = getString(R.string.scan_another)
         binding.btnScanAnother.setOnClickListener {
@@ -1297,22 +1344,17 @@ class BalanceCheckActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        if (result.isSuccess()) {
-            binding.ivResultIcon.setImageResource(android.R.drawable.ic_dialog_info)
-            binding.ivResultIcon.setColorFilter(getColor(R.color.success))
-            binding.tvResultStatus.text = "Balance found"
-            binding.tvBalance.text = result.getFormattedBalance()
-            binding.tvBalance.visibility = View.VISIBLE
-            binding.tvErrorMessage.visibility = View.GONE
-        } else {
-            showError(result)
-        }
-
+        binding.ivResultIcon.setImageResource(android.R.drawable.ic_dialog_info)
+        binding.ivResultIcon.setColorFilter(getColor(R.color.success))
+        binding.tvResultStatus.text = "Balance found"
+        binding.tvBalance.text = result.getFormattedBalance()
+        binding.tvBalance.visibility = View.VISIBLE
+        binding.tvErrorMessage.visibility = View.GONE
         binding.tvCardInfo.text = "Card: ${giftCard.getMaskedCardNumber()}"
     }
 
     private fun showError(result: BalanceResult) {
-        checkingBalance = false // Reset checking flag
+        // State transition handled by caller
         showLoading(false)
         binding.webView.visibility = View.GONE
         binding.resultCard.visibility = View.VISIBLE
@@ -1570,14 +1612,19 @@ class BalanceCheckActivity : AppCompatActivity() {
                         }
                     }
 
-                    showResult(result)
+                    // Transition to appropriate state based on result
+                    if (result.isSuccess()) {
+                        stateManager.transitionTo(BalanceCheckState.Success(result))
+                    } else {
+                        stateManager.transitionTo(BalanceCheckState.Error(result))
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing balance result JSON: $jsonString", e)
                     // Truncate long error messages
                     val errorMsg = e.message?.let { msg ->
                         if (msg.length > 200) msg.take(200) + "..." else msg
                     } ?: "Error parsing result"
-                    showError(BalanceResult.error(errorMsg))
+                    stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.error(errorMsg)))
                 }
             }
         }
@@ -1585,15 +1632,13 @@ class BalanceCheckActivity : AppCompatActivity() {
         @JavascriptInterface
         fun log(message: String) {
             Log.d(TAG, "WebView JS: $message")
-            
+
             // Handle form submission detection (when user manually submits)
             if (message == "IFRAME_NAVIGATION_DETECTED" || message == "FORM_SUBMITTED_DETECTED") {
                 handler.post {
                     Log.d(TAG, "Form submission detected - checking for balance result")
-                    if (!checkingBalance) {
-                        checkingBalance = true
-                        showLoading(true)
-                        binding.tvCaptchaInstruction.visibility = View.GONE
+                    if (!stateManager.currentState.isCheckingBalance()) {
+                        stateManager.transitionTo(BalanceCheckState.CheckingBalance)
                     }
                     // Try to extract balance after a delay
                     handler.postDelayed({
@@ -1610,21 +1655,19 @@ class BalanceCheckActivity : AppCompatActivity() {
      */
     private fun showManualSubmitFallback() {
         Log.d(TAG, "Showing manual submit fallback button")
-        
-        binding.tvCaptchaInstruction.text = 
+
+        binding.tvCaptchaInstruction.text =
             "Die Gutscheinnummer und PIN wurden automatisch ausgefüllt.\n\n" +
             "Automatische Erkennung nicht möglich.\n" +
             "Bitte lösen Sie das CAPTCHA und tippen Sie dann auf 'Absenden'."
         binding.tvCaptchaInstruction.visibility = View.VISIBLE
-        
+
         // Change button to manual submit
         binding.btnScanAnother.text = "Absenden"
         binding.btnScanAnother.setOnClickListener {
             Log.d(TAG, "Manual submit button clicked")
-            checkingBalance = true
-            showLoading(true)
-            binding.tvCaptchaInstruction.visibility = View.GONE
-            
+            stateManager.transitionTo(BalanceCheckState.CheckingBalance)
+
             // Try to submit the form via JavaScript
             val submitScript = market.getFormSubmitScript()
             binding.webView.evaluateJavascript(submitScript) { result ->
