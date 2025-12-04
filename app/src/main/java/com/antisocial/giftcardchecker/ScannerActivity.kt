@@ -138,7 +138,7 @@ class ScannerActivity : AppCompatActivity() {
             if (detectedBarcode != null) {
                 navigateToConfirmation()
             } else {
-                Toast.makeText(this, "Bitte scannen Sie den Barcode", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.please_scan_barcode), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -378,20 +378,20 @@ class ScannerActivity : AppCompatActivity() {
     
     private fun updateUI() {
         if (detectedBarcode != null) {
-            binding.tvDetectedBarcode.text = "Barcode: $detectedBarcode"
+            binding.tvDetectedBarcode.text = getString(R.string.barcode_label, detectedBarcode)
             binding.cardDetected.visibility = View.VISIBLE
         }
         
         if (detectedPin != null) {
-            binding.tvDetectedPin.text = "PIN: $detectedPin"
+            binding.tvDetectedPin.text = getString(R.string.pin_label, detectedPin)
             binding.tvDetectedPin.visibility = View.VISIBLE
         }
         
         // Update button text if we have both
         if (detectedBarcode != null && detectedPin != null) {
-            binding.btnUseBarcode.text = "Daten überprüfen"
+            binding.btnUseBarcode.text = getString(R.string.verify_data)
         } else if (detectedBarcode != null) {
-            binding.btnUseBarcode.text = "Daten überprüfen"
+            binding.btnUseBarcode.text = getString(R.string.verify_data)
         }
     }
 
@@ -568,7 +568,7 @@ class ScannerActivity : AppCompatActivity() {
         val pin = detectedPin ?: ""
         
         if (cardNumber.isEmpty()) {
-            Toast.makeText(this, "Bitte scannen Sie den Barcode", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.please_scan_barcode), Toast.LENGTH_SHORT).show()
             return
         }
         

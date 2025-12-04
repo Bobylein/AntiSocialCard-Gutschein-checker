@@ -18,7 +18,7 @@
 - [ ] **Widget support** - Home screen widget for quick balance check
 - [ ] **Batch checking** - Check multiple cards at once
 - [ ] **Dark/Light theme toggle** - Allow users to choose theme
-- [ ] **Localization** - Add German language support (currently English UI)
+- [x] **Localization** - Add German language support (all UI text translated to German)
 
 ## Known Issues
 
@@ -61,4 +61,5 @@
 - [x] Intent API compatibility utilities for deprecated methods
 - [x] ProGuard configuration for release builds
 - [x] Build configuration with debug/release variants
+- [x] German localization - All UI text translated to German
 

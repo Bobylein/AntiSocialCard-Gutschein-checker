@@ -98,6 +98,14 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **2.1**:
+  - **German Localization**:
+    - Translated all user-facing text to German
+    - Updated all string resources in `strings.xml` to German
+    - Replaced hardcoded strings in activities with string resources
+    - Modified `BalanceResult.getDisplayMessage()` to accept Context for localization
+    - All UI text, error messages, and instructions now in German
+    - Improved maintainability by using string resources throughout the app
 - **2.0**:
   - **Dependency Injection with Hilt**:
     - Integrated Hilt dependency injection framework for better code organization

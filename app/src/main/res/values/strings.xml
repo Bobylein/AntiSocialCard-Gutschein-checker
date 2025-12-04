@@ -1,48 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Gift Card Checker</string>
+    <string name="app_name">Gutschein-Checker</string>
     
     <!-- Main Activity -->
-    <string name="select_market">Select Market</string>
-    <string name="start_scan">Scan Card</string>
+    <string name="select_market">Markt auswählen</string>
+    <string name="start_scan">Karte scannen</string>
     <string name="market_rewe">REWE</string>
     <string name="market_aldi">ALDI</string>
     <string name="market_lidl">Lidl</string>
     
     <!-- Scanner Activity -->
-    <string name="scanner_title">Scan Barcode</string>
-    <string name="scanner_instruction">Point camera at the barcode on your gift card</string>
-    <string name="scanner_permission_denied">Camera permission is required to scan barcodes</string>
-    <string name="scanner_no_barcode">No barcode detected</string>
+    <string name="scanner_title">Barcode scannen</string>
+    <string name="scanner_instruction">Kamera auf den Barcode Ihrer Geschenkkarte richten</string>
+    <string name="scanner_permission_denied">Kamera-Berechtigung ist erforderlich, um Barcodes zu scannen</string>
+    <string name="scanner_no_barcode">Kein Barcode erkannt</string>
+    <string name="please_scan_barcode">Bitte scannen Sie den Barcode</string>
+    <string name="barcode_label">Barcode: %s</string>
+    <string name="pin_label">PIN: %s</string>
+    <string name="verify_data">Daten überprüfen</string>
     
     <!-- PIN Entry Activity -->
-    <string name="pin_entry_title">Enter PIN</string>
-    <string name="pin_entry_instruction">Enter the PIN from your gift card</string>
+    <string name="pin_entry_title">PIN eingeben</string>
+    <string name="pin_entry_instruction">Geben Sie die PIN von Ihrer Geschenkkarte ein</string>
     <string name="pin_hint">PIN</string>
-    <string name="card_number_label">Card Number: %s</string>
-    <string name="use_ocr">Scan PIN with Camera</string>
-    <string name="enter_manually">Enter Manually</string>
-    <string name="continue_button">Continue</string>
-    <string name="ocr_instruction">Point camera at the PIN on your card</string>
-    <string name="ocr_detected">Detected: %s</string>
-    <string name="ocr_use_this">Use This PIN</string>
-    <string name="ocr_retry">Retry</string>
+    <string name="card_number_label">Kartennummer: %s</string>
+    <string name="use_ocr">PIN mit Kamera scannen</string>
+    <string name="enter_manually">Manuell eingeben</string>
+    <string name="continue_button">Weiter</string>
+    <string name="ocr_instruction">Kamera auf die PIN auf Ihrer Karte richten</string>
+    <string name="ocr_detected">Erkannt: %s</string>
+    <string name="ocr_use_this">Diese PIN verwenden</string>
+    <string name="ocr_retry">Wiederholen</string>
+    <string name="save">Speichern</string>
+    <string name="edit">Bearbeiten</string>
     
     <!-- Balance Check Activity -->
-    <string name="balance_check_title">Checking Balance</string>
-    <string name="balance_loading">Loading…</string>
-    <string name="balance_result">Balance: %s</string>
-    <string name="balance_error">Error checking balance</string>
-    <string name="balance_invalid_card">Invalid card number or PIN</string>
-    <string name="balance_network_error">Network error. Please check your connection.</string>
-    <string name="scan_another">Scan Another Card</string>
-    <string name="done">Done</string>
+    <string name="balance_check_title">Guthaben prüfen</string>
+    <string name="balance_check">Guthaben prüfen</string>
+    <string name="balance_loading">Lädt…</string>
+    <string name="balance_result">Guthaben: %s</string>
+    <string name="balance_error">Fehler beim Prüfen des Guthabens</string>
+    <string name="balance_invalid_card">Ungültige Kartennummer oder PIN</string>
+    <string name="balance_network_error">Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.</string>
+    <string name="scan_another">Weitere Karte scannen</string>
+    <string name="done">Fertig</string>
+    <string name="form_filling_attempt">Formular wird ausgefüllt (Versuch %d)…</string>
+    <string name="balance_retrieving">Guthaben wird abgerufen…</string>
+    <string name="captcha_instruction">Die Gutscheinnummer und PIN wurden automatisch ausgefüllt.\n\nBitte lösen Sie das CAPTCHA und klicken Sie dann auf \'Guthabenabfrage\'.</string>
+    <string name="captcha_instruction_short">Bitte lösen Sie das CAPTCHA und klicken Sie dann auf \'Guthabenabfrage\'.\n\nDie Gutscheinnummer und PIN wurden bereits automatisch ausgefüllt.</string>
+    <string name="check_balance_button">Guthaben prüfen</string>
+    <string name="balance_found">Guthaben gefunden</string>
+    <string name="card_label">Karte: %s</string>
+    <string name="submit">Absenden</string>
+    <string name="auto_detection_not_possible">Automatische Erkennung nicht möglich.</string>
+    <string name="captcha_submit_instruction">Bitte lösen Sie das CAPTCHA und tippen Sie dann auf \'Absenden\'.</string>
+    <string name="no_pin_detected">Keine PIN erkannt. Bitte versuchen Sie es erneut. (Gefunden: %s…)</string>
+    <string name="card_number_required">Kartennummer ist erforderlich</string>
+    <string name="no_internet_connection">Keine Internetverbindung</string>
     
     <!-- Errors -->
-    <string name="error_generic">An error occurred</string>
-    <string name="error_camera">Camera error</string>
-    <string name="error_barcode_scan">Failed to scan barcode</string>
-    <string name="error_ocr">Failed to recognize text</string>
+    <string name="error_generic">Ein Fehler ist aufgetreten</string>
+    <string name="error">Fehler</string>
+    <string name="error_camera">Kamera-Fehler</string>
+    <string name="error_barcode_scan">Barcode konnte nicht gescannt werden</string>
+    <string name="error_ocr">Text konnte nicht erkannt werden</string>
+    <string name="invalid_card_number">Ungültige Kartennummer</string>
+    <string name="invalid_pin">Ungültige PIN</string>
+    <string name="could_not_read_balance">Guthaben konnte nicht gelesen werden</string>
+    <string name="service_unavailable">Service vorübergehend nicht verfügbar</string>
+    <string name="balance_label">Guthaben: %s</string>
 </resources>
 
 

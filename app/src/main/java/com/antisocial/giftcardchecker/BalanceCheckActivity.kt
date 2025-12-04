@@ -68,7 +68,7 @@ class BalanceCheckActivity : AppCompatActivity() {
 
         // Check network connectivity before loading
         if (!isNetworkAvailable()) {
-            stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.networkError("Keine Internetverbindung")))
+            stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.networkError(getString(R.string.no_internet_connection))))
             return
         }
 
@@ -118,22 +118,20 @@ class BalanceCheckActivity : AppCompatActivity() {
             }
             is BalanceCheckState.FillingForm -> {
                 showLoading(true)
-                binding.tvLoadingText.text = "Formular wird ausgefüllt (Versuch ${state.attemptNumber})..."
+                binding.tvLoadingText.text = getString(R.string.form_filling_attempt, state.attemptNumber)
             }
             is BalanceCheckState.WaitingForCaptcha -> {
                 showLoading(false)
                 binding.webView.visibility = View.VISIBLE
                 binding.tvCaptchaInstruction.visibility = View.VISIBLE
-                binding.tvCaptchaInstruction.text =
-                    "Die Gutscheinnummer und PIN wurden automatisch ausgefüllt.\n\n" +
-                    "Bitte lösen Sie das CAPTCHA und klicken Sie dann auf 'Guthabenabfrage'."
+                binding.tvCaptchaInstruction.text = getString(R.string.captcha_instruction)
                 binding.buttonsLayout.visibility = View.VISIBLE
-                binding.btnScanAnother.text = "Fertig"
+                binding.btnScanAnother.text = getString(R.string.done)
                 binding.btnScanAnother.setOnClickListener { finish() }
             }
             is BalanceCheckState.CheckingBalance -> {
                 showLoading(true)
-                binding.tvLoadingText.text = "Guthaben wird abgerufen..."
+                binding.tvLoadingText.text = getString(R.string.balance_retrieving)
                 binding.tvCaptchaInstruction.visibility = View.GONE
             }
             is BalanceCheckState.Success -> {
@@ -147,7 +145,7 @@ class BalanceCheckActivity : AppCompatActivity() {
     
 
     private fun setupUI() {
-        binding.tvTitle.text = "${market.displayName} - Balance Check"
+        binding.tvTitle.text = "${market.displayName} - ${getString(R.string.balance_check)}"
         
         binding.btnBack.setOnClickListener {
             finish()
@@ -1321,13 +1319,11 @@ class BalanceCheckActivity : AppCompatActivity() {
         showLoading(false)
         binding.webView.visibility = View.VISIBLE
         binding.tvCaptchaInstruction.visibility = View.VISIBLE
-        binding.tvCaptchaInstruction.text = 
-            "Bitte lösen Sie das CAPTCHA und klicken Sie dann auf 'Guthabenabfrage'.\n\n" +
-            "Die Gutscheinnummer und PIN wurden bereits automatisch ausgefüllt."
+        binding.tvCaptchaInstruction.text = getString(R.string.captcha_instruction_short)
         
         // Show buttons for manual CAPTCHA solving
         binding.buttonsLayout.visibility = View.VISIBLE
-        binding.btnScanAnother.text = "Balance prüfen"
+        binding.btnScanAnother.text = getString(R.string.check_balance_button)
         binding.btnScanAnother.setOnClickListener {
             binding.tvCaptchaInstruction.visibility = View.GONE
             showLoading(true)
@@ -1360,11 +1356,11 @@ class BalanceCheckActivity : AppCompatActivity() {
 
         binding.ivResultIcon.setImageResource(android.R.drawable.ic_dialog_info)
         binding.ivResultIcon.setColorFilter(getColor(R.color.success))
-        binding.tvResultStatus.text = "Balance found"
+        binding.tvResultStatus.text = getString(R.string.balance_found)
         binding.tvBalance.text = result.getFormattedBalance()
         binding.tvBalance.visibility = View.VISIBLE
         binding.tvErrorMessage.visibility = View.GONE
-        binding.tvCardInfo.text = "Card: ${giftCard.getMaskedCardNumber()}"
+        binding.tvCardInfo.text = getString(R.string.card_label, giftCard.getMaskedCardNumber())
     }
 
     private fun showError(result: BalanceResult) {
@@ -1392,11 +1388,11 @@ class BalanceCheckActivity : AppCompatActivity() {
 
         binding.ivResultIcon.setImageResource(iconRes)
         binding.ivResultIcon.setColorFilter(getColor(R.color.error))
-        binding.tvResultStatus.text = "Error"
+        binding.tvResultStatus.text = getString(R.string.error)
         binding.tvBalance.visibility = View.GONE
-        binding.tvErrorMessage.text = result.getDisplayMessage()
+        binding.tvErrorMessage.text = result.getDisplayMessage(this)
         binding.tvErrorMessage.visibility = View.VISIBLE
-        binding.tvCardInfo.text = "Card: ${giftCard.getMaskedCardNumber()}"
+        binding.tvCardInfo.text = getString(R.string.card_label, giftCard.getMaskedCardNumber())
     }
 
     /**
@@ -1671,13 +1667,13 @@ class BalanceCheckActivity : AppCompatActivity() {
         Log.d(TAG, "Showing manual submit fallback button")
 
         binding.tvCaptchaInstruction.text =
-            "Die Gutscheinnummer und PIN wurden automatisch ausgefüllt.\n\n" +
-            "Automatische Erkennung nicht möglich.\n" +
-            "Bitte lösen Sie das CAPTCHA und tippen Sie dann auf 'Absenden'."
+        getString(R.string.captcha_instruction_short) + "\n\n" +
+            getString(R.string.auto_detection_not_possible) + "\n" +
+            getString(R.string.captcha_submit_instruction)
         binding.tvCaptchaInstruction.visibility = View.VISIBLE
 
         // Change button to manual submit
-        binding.btnScanAnother.text = "Absenden"
+        binding.btnScanAnother.text = getString(R.string.submit)
         binding.btnScanAnother.setOnClickListener {
             Log.d(TAG, "Manual submit button clicked")
             stateManager.transitionTo(BalanceCheckState.CheckingBalance)

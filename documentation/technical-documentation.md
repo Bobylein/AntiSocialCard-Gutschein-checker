@@ -458,6 +458,34 @@ REWE gift cards require landscape card orientation to scan the barcode, but the 
 - Preserved ML Kit, WebView, and data model classes
 - Optimized release build size and obfuscation
 
+### v2.1 - German Localization
+
+**Complete UI Translation:**
+- Translated all user-facing text to German
+- Updated all string resources in `strings.xml` to German
+- App name changed to "Gutschein-Checker"
+- All activity titles, instructions, button labels, and error messages in German
+
+**Code Improvements:**
+- Replaced all hardcoded strings in activities with string resources
+- Modified `BalanceResult.getDisplayMessage()` to accept Context parameter for localization
+- Updated `BalanceCheckActivity`, `ScannerActivity`, and `PinEntryActivity` to use string resources
+- Improved maintainability by centralizing all text in string resources
+
+**New String Resources Added:**
+- Form filling status messages
+- CAPTCHA instructions (full and short versions)
+- Balance check button labels
+- Error messages (network, validation, etc.)
+- PIN detection messages
+- Card number validation messages
+
+**Benefits:**
+- Easier to maintain and update text
+- Ready for future multi-language support
+- Consistent German terminology throughout the app
+- Better user experience for German-speaking users
+
 ## Future Improvements
 
 - Add more market implementations
