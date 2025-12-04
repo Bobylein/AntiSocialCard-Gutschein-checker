@@ -112,3 +112,4 @@ models/
 captcha_models/
 *.onnx
 
+Card-Examples/
