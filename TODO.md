@@ -23,8 +23,8 @@
 
 ## Known Issues
 
-- [ ] **ALDI cross-origin iframe** - ALDI uses a cross-origin iframe (tx-gate.com) for the balance check form, preventing automatic form filling. Users must enter card details manually.
-- [ ] **ALDI CAPTCHA** - ALDI balance check also requires manual CAPTCHA solving
+- [x] **ALDI cross-origin iframe** - Fixed: Now navigates directly to iframe URL with referrer header, auto-fills form fields
+- [ ] **ALDI CAPTCHA** - ALDI balance check requires manual CAPTCHA solving and form submission (by design)
 - [ ] **Website changes** - JavaScript selectors may break if retailers update their websites
 - [ ] **OCR accuracy** - PIN OCR may not work well with unusual fonts or low-quality images
 
@@ -48,4 +48,9 @@
 - [x] WebView balance checking
 - [x] Main UI with market selection
 - [x] Error handling for common scenarios
+- [x] ALDI auto-fill implementation with direct iframe navigation
+- [x] Enhanced form field selectors with table structure fallback
+- [x] Referrer header fix for ALDI blank page issue
+- [x] Manual form submission (user submits after CAPTCHA entry)
+- [x] Form submission detection and balance extraction
 

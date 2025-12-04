@@ -143,7 +143,6 @@
         android:layout_marginTop="@dimen/spacing_sm"
         android:hint="@string/pin_hint"
         app:boxStrokeColor="@color/secondary"
-        app:endIconMode="password_toggle"
         app:hintTextColor="@color/secondary"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -153,7 +152,7 @@
             android:id="@+id/etPin"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="numberPassword"
+            android:inputType="number"
             android:maxLength="8"
             android:textColor="@color/on_surface" />
 
