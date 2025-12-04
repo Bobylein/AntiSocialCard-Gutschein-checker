@@ -21,7 +21,7 @@
     <!-- Market colors -->
     <color name="rewe_red">#CC071E</color>
     <color name="aldi_blue">#00529B</color>
-    <color name="lidl_blue">#0050AA</color>
+    <color name="lidl_blue">#FFD100</color>
     
     <!-- Status colors -->
     <color name="success">#4CAF50</color>
