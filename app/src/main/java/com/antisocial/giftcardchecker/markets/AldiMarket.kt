@@ -27,14 +27,15 @@ class AldiMarket : Market() {
     
     override val displayName: String = "ALDI Nord"
     
-    // Official ALDI Nord gift card balance check URL provided by Helaba
-    // The actual form is in an iframe from balancechecks.tx-gate.com
-    override val balanceCheckUrl: String = "https://www.helaba.com/de/aldi/"
+    // Official ALDI Nord gift card balance check URL
+    // Navigate directly to the iframe URL to avoid cross-origin restrictions
+    // The form is at balancechecks.tx-gate.com/balance.php?cid=59
+    override val balanceCheckUrl: String = "https://balancechecks.tx-gate.com/balance.php?cid=59"
     
     override val brandColor: Int = Color.parseColor("#00529B") // ALDI Blue
     
-    // ALDI requires manual form entry due to cross-origin iframe
-    override val requiresManualEntry: Boolean = true
+    // Now we can automate form filling since we're navigating directly to the form page
+    override val requiresManualEntry: Boolean = false
     
     /**
      * JavaScript to fill in the Gutschein (voucher number) and PIN fields.
@@ -52,70 +53,128 @@ class AldiMarket : Market() {
                     captchaFound: false
                 };
                 
-                // Find the Gutschein (voucher number) field
-                var gutscheinInput = document.querySelector('input[placeholder*="0000 0000"]');
+                // Find the Gutschein (voucher number) field - try multiple strategies
+                var gutscheinInput = null;
+                
+                // Strategy 1: By ID
+                gutscheinInput = document.getElementById('gutschein') || 
+                                 document.getElementById('voucher') ||
+                                 document.getElementById('cardnumber') ||
+                                 document.getElementById('card_number');
+                
+                // Strategy 2: By name attribute
                 if (!gutscheinInput) {
-                    gutscheinInput = document.querySelector('input[name*="gutschein" i]');
+                    gutscheinInput = document.querySelector('input[name*="gutschein" i]') ||
+                                    document.querySelector('input[name*="voucher" i]') ||
+                                    document.querySelector('input[name*="cardnumber" i]');
                 }
+                
+                // Strategy 3: By placeholder
                 if (!gutscheinInput) {
-                    gutscheinInput = document.querySelector('input[name*="voucher" i]');
+                    gutscheinInput = document.querySelector('input[placeholder*="0000 0000"]') ||
+                                    document.querySelector('input[placeholder*="Gutschein" i]');
                 }
+                
+                // Strategy 4: By label text
                 if (!gutscheinInput) {
-                    // Try finding by label text
-                    var labels = document.querySelectorAll('label, td, th');
+                    var labels = document.querySelectorAll('label, td, th, span');
                     for (var i = 0; i < labels.length; i++) {
                         var labelText = labels[i].textContent.toLowerCase();
-                        if (labelText.indexOf('gutschein') !== -1 && labelText.indexOf('sperren') === -1) {
-                            var nextInput = labels[i].parentElement.querySelector('input[type="text"]');
-                            if (!nextInput) {
-                                nextInput = labels[i].nextElementSibling;
-                                if (nextInput && nextInput.tagName !== 'INPUT') {
-                                    nextInput = nextInput.querySelector('input');
+                        if ((labelText.indexOf('gutschein') !== -1 || labelText.indexOf('gutscheinnummer') !== -1) && 
+                            labelText.indexOf('sperren') === -1) {
+                            // Try to find input in same row/container
+                            var container = labels[i].closest('tr, div, form, table');
+                            if (container) {
+                                gutscheinInput = container.querySelector('input[type="text"]');
+                            }
+                            if (!gutscheinInput) {
+                                gutscheinInput = labels[i].nextElementSibling;
+                                if (gutscheinInput && gutscheinInput.tagName !== 'INPUT') {
+                                    gutscheinInput = gutscheinInput.querySelector('input[type="text"]');
                                 }
                             }
-                            if (nextInput && nextInput.tagName === 'INPUT') {
-                                gutscheinInput = nextInput;
+                            if (gutscheinInput && gutscheinInput.tagName === 'INPUT') {
                                 break;
                             }
                         }
                     }
                 }
+                
+                // Strategy 5: Find first text input with long placeholder (likely voucher field)
                 if (!gutscheinInput) {
-                    // Find inputs with 19-digit placeholder
                     var inputs = document.querySelectorAll('input[type="text"]');
                     for (var j = 0; j < inputs.length; j++) {
-                        var placeholder = inputs[j].placeholder || '';
-                        if (placeholder.replace(/\s/g, '').length >= 16) {
+                        var placeholder = (inputs[j].placeholder || '').replace(/\s/g, '');
+                        if (placeholder.length >= 16) {
                             gutscheinInput = inputs[j];
                             break;
                         }
                     }
                 }
                 
-                // Find the PIN field
-                var pinInput = document.querySelector('input[placeholder="0000"]');
+                // Strategy 6: First text input in form (fallback)
+                if (!gutscheinInput) {
+                    var form = document.querySelector('form');
+                    if (form) {
+                        gutscheinInput = form.querySelector('input[type="text"]:not([type="hidden"])');
+                    }
+                }
+                
+                // Find the PIN field - try multiple strategies
+                var pinInput = null;
+                
+                // Strategy 1: By ID
+                pinInput = document.getElementById('pin') || 
+                          document.getElementById('cardpin') ||
+                          document.getElementById('card_pin');
+                
+                // Strategy 2: By name attribute
                 if (!pinInput) {
                     pinInput = document.querySelector('input[name*="pin" i]');
                 }
+                
+                // Strategy 3: By placeholder
+                if (!pinInput) {
+                    pinInput = document.querySelector('input[placeholder*="0000"]') ||
+                               document.querySelector('input[placeholder*="PIN" i]');
+                }
+                
+                // Strategy 4: Password input (some forms use password type for PIN)
                 if (!pinInput) {
                     pinInput = document.querySelector('input[type="password"]');
                 }
+                
+                // Strategy 5: By label text
                 if (!pinInput) {
-                    var labels = document.querySelectorAll('label, td, th');
+                    var labels = document.querySelectorAll('label, td, th, span');
                     for (var k = 0; k < labels.length; k++) {
                         var labelText = labels[k].textContent.trim().toLowerCase();
-                        if (labelText === 'pin' || labelText === 'pin:') {
-                            var nextInput = labels[k].parentElement.querySelector('input');
-                            if (!nextInput) {
-                                nextInput = labels[k].nextElementSibling;
-                                if (nextInput && nextInput.tagName !== 'INPUT') {
-                                    nextInput = nextInput.querySelector('input');
+                        if (labelText === 'pin' || labelText === 'pin:' || labelText.indexOf('pin') !== -1) {
+                            var container = labels[k].closest('tr, div, form, table');
+                            if (container) {
+                                pinInput = container.querySelector('input[type="text"], input[type="password"]');
+                            }
+                            if (!pinInput) {
+                                pinInput = labels[k].nextElementSibling;
+                                if (pinInput && pinInput.tagName !== 'INPUT') {
+                                    pinInput = pinInput.querySelector('input[type="text"], input[type="password"]');
                                 }
                             }
-                            if (nextInput && nextInput.tagName === 'INPUT') {
-                                pinInput = nextInput;
+                            if (pinInput && pinInput.tagName === 'INPUT') {
                                 break;
                             }
+                        }
+                    }
+                }
+                
+                // Strategy 6: Second text input in form (fallback - usually PIN comes after voucher)
+                if (!pinInput && gutscheinInput) {
+                    var form = document.querySelector('form');
+                    if (form) {
+                        var allInputs = Array.from(form.querySelectorAll('input[type="text"], input[type="password"]'));
+                        var gutscheinIndex = allInputs.indexOf(gutscheinInput);
+                        if (gutscheinIndex !== -1 && gutscheinIndex + 1 < allInputs.length) {
+                            pinInput = allInputs[gutscheinIndex + 1];
                         }
                     }
                 }
@@ -142,19 +201,29 @@ class AldiMarket : Market() {
                     }
                 }
                 
-                // Fill the Gutschein field
+                // Fill the Gutschein field with proper event triggering
                 if (gutscheinInput) {
+                    gutscheinInput.focus();
                     gutscheinInput.value = '${card.cardNumber}';
-                    gutscheinInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    gutscheinInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    // Trigger multiple events to ensure form validation recognizes the value
+                    gutscheinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                    gutscheinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                    gutscheinInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+                    // Set value directly as well (some forms check .value directly)
+                    gutscheinInput.setAttribute('value', '${card.cardNumber}');
                     result.gutscheinFound = true;
                 }
                 
-                // Fill the PIN field
+                // Fill the PIN field with proper event triggering
                 if (pinInput) {
+                    pinInput.focus();
                     pinInput.value = '${card.pin}';
-                    pinInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    pinInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    // Trigger multiple events to ensure form validation recognizes the value
+                    pinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                    pinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                    pinInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+                    // Set value directly as well (some forms check .value directly)
+                    pinInput.setAttribute('value', '${card.pin}');
                     result.pinFound = true;
                 }
                 

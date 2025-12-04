@@ -269,10 +269,13 @@ class BalanceCheckActivity : AppCompatActivity() {
         showLoading(false)
         binding.webView.visibility = View.VISIBLE
         binding.tvCaptchaInstruction.visibility = View.VISIBLE
+        binding.tvCaptchaInstruction.text = 
+            "Bitte lösen Sie das CAPTCHA und klicken Sie dann auf 'Guthabenabfrage'.\n\n" +
+            "Die Gutscheinnummer und PIN wurden bereits automatisch ausgefüllt."
         
-        // Show buttons for manual interaction
+        // Show buttons for manual CAPTCHA solving
         binding.buttonsLayout.visibility = View.VISIBLE
-        binding.btnScanAnother.text = "Check Balance"
+        binding.btnScanAnother.text = "Balance prüfen"
         binding.btnScanAnother.setOnClickListener {
             binding.tvCaptchaInstruction.visibility = View.GONE
             showLoading(true)
