@@ -66,8 +66,8 @@ class ScannerActivity : AppCompatActivity() {
      * Card types for different markets - different card designs have different PIN locations
      */
     enum class ReweCardType {
-        TYPE_1  // PIN in separate field to the left of barcode
-        // Other types can be added here as needed
+        TYPE_1,  // PIN in separate field to the left of barcode
+        TYPE_2   // Aztec barcode - uses first 13 digits of scanned code
     }
     
     enum class LidlCardType {
@@ -298,8 +298,8 @@ class ScannerActivity : AppCompatActivity() {
     }
 
     private fun onBarcodeDetected(barcode: String, boundingBox: Rect?) {
-        // Extract only the last 20 digits (gift card numbers are typically 19-20 digits)
-        val processedBarcode = extractLast20Digits(barcode)
+        // Extract card number based on market type
+        val processedBarcode = extractCardNumber(barcode, marketType)
         
         if (detectedBarcode == processedBarcode) return // Already showing this barcode
 
@@ -499,13 +499,54 @@ class ScannerActivity : AppCompatActivity() {
     
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     
-    private fun extractLast20Digits(barcode: String): String {
-        // Remove any non-digit characters and take the last 20 digits
+    /**
+     * Extract card number from barcode based on market type and card type.
+     * - REWE TYPE_1: last 13 digits
+     * - REWE TYPE_2: first 13 digits (Aztec barcode)
+     * - LIDL: last 20 digits
+     * - ALDI: last 20 digits
+     */
+    private fun extractCardNumber(barcode: String, marketType: MarketType, cardType: ReweCardType? = null): String {
+        // Remove any non-digit characters
         val digitsOnly = barcode.filter { it.isDigit() }
-        return if (digitsOnly.length > 20) {
-            digitsOnly.takeLast(20)
-        } else {
-            digitsOnly
+        
+        return when (marketType) {
+            MarketType.REWE -> {
+                when (cardType) {
+                    ReweCardType.TYPE_2 -> {
+                        // REWE TYPE_2: first 13 digits (Aztec barcode)
+                        if (digitsOnly.length >= 13) {
+                            digitsOnly.take(13)
+                        } else {
+                            digitsOnly
+                        }
+                    }
+                    else -> {
+                        // REWE TYPE_1: last 13 digits (default)
+                        if (digitsOnly.length >= 13) {
+                            digitsOnly.takeLast(13)
+                        } else {
+                            digitsOnly
+                        }
+                    }
+                }
+            }
+            MarketType.LIDL -> {
+                // LIDL: last 20 digits (always take last 20 if available)
+                if (digitsOnly.length > 20) {
+                    digitsOnly.takeLast(20)
+                } else {
+                    digitsOnly
+                }
+            }
+            MarketType.ALDI -> {
+                // ALDI: last 20 digits (always take last 20 if available)
+                if (digitsOnly.length > 20) {
+                    digitsOnly.takeLast(20)
+                } else {
+                    digitsOnly
+                }
+            }
         }
     }
 
@@ -615,7 +656,16 @@ class ScannerActivity : AppCompatActivity() {
                             value?.let {
                                 if (isValidBarcode(it)) {
                                     Log.d(TAG, "Valid barcode: $it")
-                                    barcodeResult = extractLast20Digits(it)
+                                    
+                                    // Detect REWE card type based on barcode format
+                                    val reweCardType = if (marketType == MarketType.REWE) {
+                                        detectReweCardType(format)
+                                    } else {
+                                        null
+                                    }
+                                    detectedReweCardType = reweCardType
+                                    
+                                    barcodeResult = extractCardNumber(it, marketType, reweCardType)
                                     barcodeBoundingBox = boundingBox
                                     
                                     // Process PIN detection with region-of-interest if barcode found
@@ -745,14 +795,16 @@ class ScannerActivity : AppCompatActivity() {
         }
 
         /**
-         * Detect REWE card type based on barcode position and card layout.
-         * For now, defaults to TYPE_1. Can be enhanced with visual detection later.
+         * Detect REWE card type based on barcode format.
+         * TYPE_2 uses Aztec barcode format.
          */
-        private fun detectReweCardType(@Suppress("UNUSED_PARAMETER") barcodeBox: Rect, @Suppress("UNUSED_PARAMETER") imageWidth: Int, @Suppress("UNUSED_PARAMETER") imageHeight: Int): ReweCardType {
-            // For now, default to TYPE_1 (PIN in separate field to the left)
-            // Future: Could analyze card layout, barcode position, or other visual features
-            // to automatically detect card type
-            return ReweCardType.TYPE_1
+        private fun detectReweCardType(barcodeFormat: Int): ReweCardType {
+            // TYPE_2 uses Aztec barcode format
+            return if (barcodeFormat == Barcode.FORMAT_AZTEC) {
+                ReweCardType.TYPE_2
+            } else {
+                ReweCardType.TYPE_1
+            }
         }
         
         /**
@@ -791,9 +843,8 @@ class ScannerActivity : AppCompatActivity() {
                 
                 when (marketType) {
                     MarketType.REWE -> {
-                        // Detect REWE card type
-                        val cardType = detectReweCardType(barcodeBox, imageWidth, imageHeight)
-                        detectedReweCardType = cardType
+                        // Use already detected REWE card type
+                        val cardType = detectedReweCardType ?: ReweCardType.TYPE_1
                         
                         when (cardType) {
                             ReweCardType.TYPE_1 -> {
@@ -819,6 +870,19 @@ class ScannerActivity : AppCompatActivity() {
                                 Log.d(TAG, "Extended search region: width=$extendedWidth (from 0 to ${barcodeBox.left}), height=$extendedHeight")
                                 Log.d(TAG, "Region coordinates: left=$pinRegionLeft, top=$pinRegionTop, right=$pinRegionRight, bottom=$pinRegionBottom")
                                 Log.d(TAG, "Region size: ${pinRegionRight - pinRegionLeft} x ${pinRegionBottom - pinRegionTop}")
+                            }
+                            ReweCardType.TYPE_2 -> {
+                                // TYPE_2: Aztec barcode - PIN location same as TYPE_1 (in separate field to the LEFT)
+                                val maxSearchWidth = barcodeBox.left.coerceAtLeast(200)
+                                val extendedWidth = maxSearchWidth.coerceAtMost(imageWidth / 2)
+                                val extendedHeight = (barcodeBox.height() * 2).coerceAtMost(imageHeight)
+                                
+                                pinRegionLeft = 0
+                                pinRegionTop = (barcodeBox.top - barcodeBox.height() / 2).coerceAtLeast(0)
+                                pinRegionRight = barcodeBox.left
+                                pinRegionBottom = (barcodeBox.bottom + barcodeBox.height() / 2).coerceAtMost(imageHeight)
+                                
+                                Log.d(TAG, "REWE TYPE_2: Aztec barcode - PIN in separate field to the LEFT of barcode")
                             }
                         }
                     }

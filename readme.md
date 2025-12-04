@@ -24,7 +24,7 @@ An Android application for checking gift card balances by scanning barcodes and 
 |--------|---------|-------------|------|
 | REWE | kartenwelt.rewe.de | Variable length barcode, PIN | Automatic |
 | ALDI Nord | helaba.com/de/aldi | 20-digit number, 4-digit PIN | Auto-fill* |
-| Lidl | lidl.de | 18-digit number, 4-digit PIN | Auto-fill* |
+| Lidl | lidl.de | 20-digit number, 4-digit PIN | Auto-fill* |
 
 *ALDI and Lidl form fields are auto-filled. User must solve CAPTCHA and submit manually.
 
@@ -96,6 +96,10 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.5**: 
+  - Fixed Lidl card number extraction: now uses last 20 digits (same as ALDI)
+  - Added REWE TYPE_2 support: detects Aztec barcodes and extracts first 13 digits
+  - Updated card number extraction logic for all markets
 - **1.4**: 
   - Added Lidl gift card support
   - Fixed long error messages in WebView (truncated to prevent UI issues)

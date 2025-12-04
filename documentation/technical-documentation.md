@@ -199,6 +199,9 @@ var balancePatterns = [
 - **URL**: `https://kartenwelt.rewe.de/rewe-geschenkkarte.html`
 - **Fields**: Kartennummer (card number), PIN
 - **Brand Color**: #CC071E (Red)
+- **Card Types**:
+  - **TYPE_1**: Standard barcode - uses last 13 digits of scanned code
+  - **TYPE_2**: Aztec barcode - uses first 13 digits of scanned code
 
 ### ALDI Nord (AldiMarket)
 
@@ -301,7 +304,7 @@ var balancePatterns = [
   - Added LidlMarket class using same form provider as ALDI (tx-gate.com)
   - Uses direct iframe URL loading: `balancechecks.tx-gate.com/balance.php?cid=79`
   - Same form field selectors as ALDI (cardnumberfield, pin, input for CAPTCHA)
-  - 18-digit card number, 4-digit PIN format
+  - 20-digit card number (last 20 digits of scanned barcode), 4-digit PIN format
 - **Error Message Handling**:
   - Truncated console messages to 500 characters in logcat
   - Truncated user-facing error messages to 200 characters

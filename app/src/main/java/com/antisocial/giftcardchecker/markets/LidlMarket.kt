@@ -14,7 +14,7 @@ import java.util.regex.Pattern
  * similar to ALDI. We navigate directly to the iframe URL for form filling.
  *
  * Card format:
- * - Card number: 18 digits
+ * - Card number: 20 digits (last 20 digits of scanned barcode)
  * - PIN: 4 digits
  */
 class LidlMarket : Market() {
