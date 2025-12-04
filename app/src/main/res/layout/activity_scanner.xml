@@ -214,7 +214,7 @@
         app:layout_constraintStart_toStartOf="@id/scannerFrame"
         app:layout_constraintTop_toTopOf="@id/scannerFrame" />
 
-    <!-- Barcode highlight overlay - positioned relative to previewView -->
+    <!-- Expected barcode search region (RED) - positioned relative to previewView -->
     <View
         android:id="@+id/barcodeHighlight"
         android:layout_width="wrap_content"
@@ -225,7 +225,7 @@
         app:layout_constraintStart_toStartOf="@id/previewView"
         app:layout_constraintTop_toTopOf="@id/previewView" />
 
-    <!-- PIN highlight overlay - positioned relative to previewView -->
+    <!-- Expected PIN search region (BLUE) - positioned relative to previewView -->
     <View
         android:id="@+id/pinHighlight"
         android:layout_width="wrap_content"
@@ -236,7 +236,7 @@
         app:layout_constraintStart_toStartOf="@id/previewView"
         app:layout_constraintTop_toTopOf="@id/previewView" />
 
-    <!-- Debug: PIN search region overlay - shows where we're looking for PIN -->
+    <!-- Reserved for future use -->
     <View
         android:id="@+id/pinSearchRegionHighlight"
         android:layout_width="wrap_content"

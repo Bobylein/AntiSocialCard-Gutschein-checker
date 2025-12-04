@@ -53,9 +53,8 @@ class ScannerActivity : AppCompatActivity() {
     private var marketType: MarketType = MarketType.REWE
     private var detectedBarcode: String? = null
     private var detectedPin: String? = null
-    private var detectedBarcodeBox: Rect? = null
-    private var detectedPinBox: Rect? = null
-    private var pinSearchRegion: Rect? = null // Store PIN search region for display
+    private var pinSearchRegion: Rect? = null // Store expected PIN search region (BLUE)
+    private var barcodeSearchRegion: Rect? = null // Store expected barcode search region (RED)
     private var imageAnalysisWidth: Int = 1920 // Default, will be updated from actual image
     private var imageAnalysisHeight: Int = 1080 // Default, will be updated from actual image
     private var imageRotationDegrees: Int = 0 // Will be updated from actual image
@@ -305,9 +304,8 @@ class ScannerActivity : AppCompatActivity() {
         if (detectedBarcode == processedBarcode) return // Already showing this barcode
 
         detectedBarcode = processedBarcode
-        detectedBarcodeBox = boundingBox
+        // Note: We show expected search regions, not detected bounding boxes
         updateUI()
-        updateHighlights()
         
         Log.d(TAG, "Original barcode: $barcode -> Processed: $processedBarcode")
     }
@@ -332,9 +330,8 @@ class ScannerActivity : AppCompatActivity() {
         }
         
         detectedPin = pin
-        detectedPinBox = boundingBox
+        // Note: We show expected search regions, not detected bounding boxes
         updateUI()
-        updateHighlights()
         
         Log.d(TAG, "PIN detected: $pin")
     }
@@ -402,17 +399,11 @@ class ScannerActivity : AppCompatActivity() {
     }
 
     /**
-     * Update highlight overlays to show detected barcode and PIN regions.
+     * Update highlight overlays to show EXPECTED barcode and PIN search regions.
+     * - RED: Expected barcode region
+     * - BLUE: Expected PIN region
      */
     private fun updateHighlights() {
-        // Hide highlights if no detections
-        if (detectedBarcodeBox == null && detectedPinBox == null && pinSearchRegion == null) {
-            binding.barcodeHighlight.visibility = View.GONE
-            binding.pinHighlight.visibility = View.GONE
-            binding.pinSearchRegionHighlight.visibility = View.GONE
-            return
-        }
-
         // Get preview view dimensions
         val previewView = binding.previewView
         val previewWidth = previewView.width
@@ -452,69 +443,48 @@ class ScannerActivity : AppCompatActivity() {
             offsetY = 0
         }
 
-        // Update barcode highlight
-        detectedBarcodeBox?.let { box ->
-            val left = (box.left * scaleX + offsetX).toInt()
-            val top = (box.top * scaleY + offsetY).toInt()
-            val right = (box.right * scaleX + offsetX).toInt()
-            val bottom = (box.bottom * scaleY + offsetY).toInt()
+        // Update barcode search region highlight (RED) - where we expect the barcode
+        barcodeSearchRegion?.let { region ->
+            val left = (region.left * scaleX + offsetX).toInt()
+            val top = (region.top * scaleY + offsetY).toInt()
+            val right = (region.right * scaleX + offsetX).toInt()
+            val bottom = (region.bottom * scaleY + offsetY).toInt()
 
             val layoutParams = binding.barcodeHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            layoutParams.leftMargin = left
-            layoutParams.topMargin = top
-            layoutParams.width = right - left
-            layoutParams.height = bottom - top
+            layoutParams.leftMargin = left.coerceAtLeast(0)
+            layoutParams.topMargin = top.coerceAtLeast(0)
+            layoutParams.width = (right - left).coerceAtLeast(1)
+            layoutParams.height = (bottom - top).coerceAtLeast(1)
             binding.barcodeHighlight.layoutParams = layoutParams
             binding.barcodeHighlight.visibility = View.VISIBLE
 
-            Log.d(TAG, "Barcode highlight: image=${imageWidth}x${imageHeight}, preview=${previewWidth}x${previewHeight}, scale=$scaleX/$scaleY, offset=$offsetX/$offsetY")
-            Log.d(TAG, "Barcode box: left=${box.left}, top=${box.top}, right=${box.right}, bottom=${box.bottom}")
-            Log.d(TAG, "Barcode highlight: left=$left, top=$top, width=${right - left}, height=${bottom - top}")
+            Log.d(TAG, "Barcode search region (RED): left=$left, top=$top, width=${right - left}, height=${bottom - top}")
         } ?: run {
             binding.barcodeHighlight.visibility = View.GONE
         }
 
-        // Update PIN highlight
-        detectedPinBox?.let { box ->
-            val left = (box.left * scaleX + offsetX).toInt()
-            val top = (box.top * scaleY + offsetY).toInt()
-            val right = (box.right * scaleX + offsetX).toInt()
-            val bottom = (box.bottom * scaleY + offsetY).toInt()
-
-            val layoutParams = binding.pinHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            layoutParams.leftMargin = left
-            layoutParams.topMargin = top
-            layoutParams.width = right - left
-            layoutParams.height = bottom - top
-            binding.pinHighlight.layoutParams = layoutParams
-            binding.pinHighlight.visibility = View.VISIBLE
-
-            Log.d(TAG, "PIN highlight: image=${imageWidth}x${imageHeight}, preview=${previewWidth}x${previewHeight}, scale=$scaleX/$scaleY, offset=$offsetX/$offsetY")
-            Log.d(TAG, "PIN box: left=${box.left}, top=${box.top}, right=${box.right}, bottom=${box.bottom}")
-            Log.d(TAG, "PIN highlight: left=$left, top=$top, width=${right - left}, height=${bottom - top}")
-        } ?: run {
-            binding.pinHighlight.visibility = View.GONE
-        }
-        
-        // Update PIN search region highlight (show where we're scanning for PIN)
+        // Update PIN search region highlight (BLUE) - where we expect the PIN
         pinSearchRegion?.let { region ->
             val left = (region.left * scaleX + offsetX).toInt()
             val top = (region.top * scaleY + offsetY).toInt()
             val right = (region.right * scaleX + offsetX).toInt()
             val bottom = (region.bottom * scaleY + offsetY).toInt()
 
-            val layoutParams = binding.pinSearchRegionHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            layoutParams.leftMargin = left
-            layoutParams.topMargin = top
-            layoutParams.width = right - left
-            layoutParams.height = bottom - top
-            binding.pinSearchRegionHighlight.layoutParams = layoutParams
-            binding.pinSearchRegionHighlight.visibility = View.VISIBLE
+            val layoutParams = binding.pinHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            layoutParams.leftMargin = left.coerceAtLeast(0)
+            layoutParams.topMargin = top.coerceAtLeast(0)
+            layoutParams.width = (right - left).coerceAtLeast(1)
+            layoutParams.height = (bottom - top).coerceAtLeast(1)
+            binding.pinHighlight.layoutParams = layoutParams
+            binding.pinHighlight.visibility = View.VISIBLE
 
-            Log.d(TAG, "PIN search region highlight: left=$left, top=$top, width=${right - left}, height=${bottom - top}")
+            Log.d(TAG, "PIN search region (BLUE): left=$left, top=$top, width=${right - left}, height=${bottom - top}")
         } ?: run {
-            binding.pinSearchRegionHighlight.visibility = View.GONE
+            binding.pinHighlight.visibility = View.GONE
         }
+        
+        // Hide the debug highlight (no longer needed)
+        binding.pinSearchRegionHighlight.visibility = View.GONE
     }
     
     // Auto-navigation removed - user must confirm manually via button
@@ -645,6 +615,24 @@ class ScannerActivity : AppCompatActivity() {
                 Log.d(TAG, "ImageProxy dimensions: ${imageProxy.width}x${imageProxy.height}")
                 Log.d(TAG, "ML Kit coordinate dimensions: ${mlKitWidth}x${mlKitHeight} (rotation: $rotationDegrees)")
 
+                // Calculate and set the expected barcode search region (center of image)
+                // The barcode should be roughly in the center, spanning most of the width
+                val expectedBarcodeRegion = Rect(
+                    (mlKitWidth * 0.1).toInt(),      // 10% from left
+                    (mlKitHeight * 0.3).toInt(),    // 30% from top
+                    (mlKitWidth * 0.9).toInt(),      // 90% from left (80% width)
+                    (mlKitHeight * 0.55).toInt()     // 55% from top (25% height)
+                )
+                
+                // Store dimensions and barcode region immediately for highlighting
+                imageAnalysisWidth = mlKitWidth
+                imageAnalysisHeight = mlKitHeight
+                imageRotationDegrees = rotationDegrees
+                barcodeSearchRegion = expectedBarcodeRegion
+                
+                // Update highlights on UI thread to show expected barcode region
+                runOnUiThread { updateHighlights() }
+
                 var barcodeResult: String? = null
                 var barcodeBoundingBox: Rect? = null
                 var pinResult: String? = null
@@ -657,10 +645,6 @@ class ScannerActivity : AppCompatActivity() {
                     if (barcodeCompleted && pinCompleted) {
                         isProcessing.set(false)
                         imageProxy.close()
-                        // Store image dimensions and rotation for highlight positioning
-                        imageAnalysisWidth = mlKitWidth
-                        imageAnalysisHeight = mlKitHeight
-                        imageRotationDegrees = rotationDegrees
                         onResults(barcodeResult, pinResult, barcodeBoundingBox, pinBoundingBox)
                     }
                 }
@@ -997,6 +981,9 @@ class ScannerActivity : AppCompatActivity() {
                 
                 // Store PIN search region for display (in ML Kit coordinate system)
                 pinSearchRegion = pinRegion
+                
+                // Update highlights on UI thread to show PIN search region
+                runOnUiThread { updateHighlights() }
                 
                 Log.d(TAG, "=== PIN REGION DEBUG ===")
                 Log.d(TAG, "Market type: $marketType")

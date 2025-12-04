@@ -7,7 +7,7 @@ An Android application for checking gift card balances by scanning barcodes and 
 - **Enhanced Barcode Scanning**: 
   - High-resolution scanning (1920x1080) for better distance detection
   - Auto-focus and continuous focus mode for sharp images
-  - Visual highlighting of detected barcodes and PINs
+  - Visual guides: RED shows expected barcode area, BLUE shows expected PIN area
   - Pinch-to-zoom support for manual adjustment
   - User confirmation required before proceeding
 - **Smart PIN Detection**: 

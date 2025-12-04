@@ -113,10 +113,11 @@ Uses CameraX with ML Kit Barcode Scanner with enhanced distance scanning:
    - Display detected barcode with visual highlight
 
 4. **Visual Feedback**:
-   - Green highlight overlay for detected barcode
-   - Blue highlight overlay for detected PIN
+   - RED highlight overlay shows expected barcode search region
+   - BLUE highlight overlay shows expected PIN search region
    - Coordinate conversion from image space to screen space
    - Highlights positioned relative to preview view
+   - Helps users position the gift card correctly
 
 5. **User Interaction**:
    - Pinch-to-zoom gesture support
