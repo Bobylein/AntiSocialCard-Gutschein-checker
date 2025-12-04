@@ -1,4 +1,5 @@
 captcha_models/
+test_cards/
 
 # Built application files
 *.apk

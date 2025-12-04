@@ -55,6 +55,7 @@ class ScannerActivity : AppCompatActivity() {
     private var detectedPin: String? = null
     private var detectedBarcodeBox: Rect? = null
     private var detectedPinBox: Rect? = null
+    private var pinSearchRegion: Rect? = null // Store PIN search region for display
     private var imageAnalysisWidth: Int = 1920 // Default, will be updated from actual image
     private var imageAnalysisHeight: Int = 1080 // Default, will be updated from actual image
     private var imageRotationDegrees: Int = 0 // Will be updated from actual image
@@ -405,9 +406,10 @@ class ScannerActivity : AppCompatActivity() {
      */
     private fun updateHighlights() {
         // Hide highlights if no detections
-        if (detectedBarcodeBox == null && detectedPinBox == null) {
+        if (detectedBarcodeBox == null && detectedPinBox == null && pinSearchRegion == null) {
             binding.barcodeHighlight.visibility = View.GONE
             binding.pinHighlight.visibility = View.GONE
+            binding.pinSearchRegionHighlight.visibility = View.GONE
             return
         }
 
@@ -492,6 +494,26 @@ class ScannerActivity : AppCompatActivity() {
             Log.d(TAG, "PIN highlight: left=$left, top=$top, width=${right - left}, height=${bottom - top}")
         } ?: run {
             binding.pinHighlight.visibility = View.GONE
+        }
+        
+        // Update PIN search region highlight (show where we're scanning for PIN)
+        pinSearchRegion?.let { region ->
+            val left = (region.left * scaleX + offsetX).toInt()
+            val top = (region.top * scaleY + offsetY).toInt()
+            val right = (region.right * scaleX + offsetX).toInt()
+            val bottom = (region.bottom * scaleY + offsetY).toInt()
+
+            val layoutParams = binding.pinSearchRegionHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            layoutParams.leftMargin = left
+            layoutParams.topMargin = top
+            layoutParams.width = right - left
+            layoutParams.height = bottom - top
+            binding.pinSearchRegionHighlight.layoutParams = layoutParams
+            binding.pinSearchRegionHighlight.visibility = View.VISIBLE
+
+            Log.d(TAG, "PIN search region highlight: left=$left, top=$top, width=${right - left}, height=${bottom - top}")
+        } ?: run {
+            binding.pinSearchRegionHighlight.visibility = View.GONE
         }
     }
     
@@ -849,40 +871,80 @@ class ScannerActivity : AppCompatActivity() {
                         when (cardType) {
                             ReweCardType.TYPE_1 -> {
                                 // TYPE_1: PIN is in a separate field to the LEFT of the barcode
-                                // The PIN field is typically a distinct rectangular area, separate from the barcode
-                                // Use a much larger region to cover the separate PIN field area - search from left edge of image
-                                // Calculate region to cover entire left half of image, up to barcode
-                                val maxSearchWidth = barcodeBox.left.coerceAtLeast(200) // Search up to barcode or at least 200px
-                                val extendedWidth = maxSearchWidth.coerceAtMost(imageWidth / 2) // Up to half image width
+                                // 
+                                // IMPORTANT: REWE cards are designed to be scanned with the card held
+                                // horizontally (landscape). When the phone is in portrait mode (90° rotation),
+                                // the "left side of the card" maps to the TOP of the ML Kit coordinate system.
+                                //
+                                // We use a barcode-relative region that works regardless of rotation:
+                                // The PIN field is to the left of the barcode on the physical card.
+                                // In ML Kit coordinates (which are rotation-corrected):
+                                // - For 90° rotation: "left of barcode" = above the barcode's bounding box
+                                // - For 0° rotation: "left of barcode" = to the left of barcode's bounding box
+                                //
+                                // Strategy: Search the area to the left AND above the barcode to handle
+                                // different physical card orientations.
                                 
-                                // Use full height from top to bottom of barcode area, plus some margin
-                                val extendedHeight = (barcodeBox.height() * 2).coerceAtMost(imageHeight)
+                                // Calculate region based on barcode position - much more reliable
+                                val barcodeWidth = barcodeBox.width()
+                                val barcodeHeight = barcodeBox.height()
                                 
-                                // Position region starting from left edge of image, extending to barcode
-                                // IMPORTANT: Region must be STRICTLY to the LEFT of barcode (pinRegionRight = barcodeBox.left)
-                                pinRegionLeft = 0  // Start from left edge of image
-                                pinRegionTop = (barcodeBox.top - barcodeBox.height() / 2).coerceAtLeast(0)  // Start above barcode
-                                pinRegionRight = barcodeBox.left  // Stop at barcode's left edge - do NOT include barcode
-                                pinRegionBottom = (barcodeBox.bottom + barcodeBox.height() / 2).coerceAtMost(imageHeight)  // Extend below barcode
+                                // For 90° or 270° rotation (portrait phone, landscape card), 
+                                // "left of barcode" appears as "above barcode" in ML Kit coords
+                                // For 0° or 180° rotation, "left of barcode" is actually left
+                                val isPortraitMode = rotationDegrees == 90 || rotationDegrees == 270
                                 
-                                Log.d(TAG, "REWE TYPE_1: PIN in separate field to the LEFT of barcode")
-                                Log.d(TAG, "Search region: LEFT side only (right edge at barcode left: ${barcodeBox.left})")
-                                Log.d(TAG, "Extended search region: width=$extendedWidth (from 0 to ${barcodeBox.left}), height=$extendedHeight")
-                                Log.d(TAG, "Region coordinates: left=$pinRegionLeft, top=$pinRegionTop, right=$pinRegionRight, bottom=$pinRegionBottom")
-                                Log.d(TAG, "Region size: ${pinRegionRight - pinRegionLeft} x ${pinRegionBottom - pinRegionTop}")
+                                if (isPortraitMode) {
+                                    // In portrait mode with landscape card: PIN is ABOVE barcode in ML Kit coords
+                                    // Search a region above the barcode
+                                    val searchHeight = (barcodeHeight * 2).coerceAtMost(barcodeBox.top)
+                                    pinRegionLeft = (barcodeBox.left - barcodeWidth / 2).coerceAtLeast(0)
+                                    pinRegionTop = (barcodeBox.top - searchHeight).coerceAtLeast(0)
+                                    pinRegionRight = (barcodeBox.right + barcodeWidth / 2).coerceAtMost(imageWidth)
+                                    pinRegionBottom = barcodeBox.top
+                                    
+                                    Log.d(TAG, "REWE TYPE_1 (portrait mode): PIN search ABOVE barcode in ML Kit coords")
+                                } else {
+                                    // In landscape mode: PIN is to the LEFT of barcode in ML Kit coords
+                                    val searchWidth = (barcodeWidth * 2).coerceAtMost(barcodeBox.left)
+                                    pinRegionLeft = (barcodeBox.left - searchWidth).coerceAtLeast(0)
+                                    pinRegionTop = (barcodeBox.top - barcodeHeight / 2).coerceAtLeast(0)
+                                    pinRegionRight = barcodeBox.left
+                                    pinRegionBottom = (barcodeBox.bottom + barcodeHeight / 2).coerceAtMost(imageHeight)
+                                    
+                                    Log.d(TAG, "REWE TYPE_1 (landscape mode): PIN search LEFT of barcode in ML Kit coords")
+                                }
+                                
+                                Log.d(TAG, "Rotation: $rotationDegrees, isPortraitMode: $isPortraitMode")
+                                Log.d(TAG, "Barcode box: left=${barcodeBox.left}, top=${barcodeBox.top}, right=${barcodeBox.right}, bottom=${barcodeBox.bottom}")
+                                Log.d(TAG, "Search region: left=$pinRegionLeft, top=$pinRegionTop, right=$pinRegionRight, bottom=$pinRegionBottom")
                             }
                             ReweCardType.TYPE_2 -> {
                                 // TYPE_2: Aztec barcode - PIN location same as TYPE_1 (in separate field to the LEFT)
-                                val maxSearchWidth = barcodeBox.left.coerceAtLeast(200)
-                                val extendedWidth = maxSearchWidth.coerceAtMost(imageWidth / 2)
-                                val extendedHeight = (barcodeBox.height() * 2).coerceAtMost(imageHeight)
+                                // Apply same rotation-aware logic
+                                val barcodeWidth = barcodeBox.width()
+                                val barcodeHeight = barcodeBox.height()
+                                val isPortraitMode = rotationDegrees == 90 || rotationDegrees == 270
                                 
-                                pinRegionLeft = 0
-                                pinRegionTop = (barcodeBox.top - barcodeBox.height() / 2).coerceAtLeast(0)
-                                pinRegionRight = barcodeBox.left
-                                pinRegionBottom = (barcodeBox.bottom + barcodeBox.height() / 2).coerceAtMost(imageHeight)
-                                
-                                Log.d(TAG, "REWE TYPE_2: Aztec barcode - PIN in separate field to the LEFT of barcode")
+                                if (isPortraitMode) {
+                                    // PIN is ABOVE barcode in ML Kit coords (portrait phone, landscape card)
+                                    val searchHeight = (barcodeHeight * 2).coerceAtMost(barcodeBox.top)
+                                    pinRegionLeft = (barcodeBox.left - barcodeWidth / 2).coerceAtLeast(0)
+                                    pinRegionTop = (barcodeBox.top - searchHeight).coerceAtLeast(0)
+                                    pinRegionRight = (barcodeBox.right + barcodeWidth / 2).coerceAtMost(imageWidth)
+                                    pinRegionBottom = barcodeBox.top
+                                    
+                                    Log.d(TAG, "REWE TYPE_2 (portrait mode): Aztec barcode - PIN search ABOVE barcode")
+                                } else {
+                                    // PIN is to the LEFT of barcode in ML Kit coords
+                                    val searchWidth = (barcodeWidth * 2).coerceAtMost(barcodeBox.left)
+                                    pinRegionLeft = (barcodeBox.left - searchWidth).coerceAtLeast(0)
+                                    pinRegionTop = (barcodeBox.top - barcodeHeight / 2).coerceAtLeast(0)
+                                    pinRegionRight = barcodeBox.left
+                                    pinRegionBottom = (barcodeBox.bottom + barcodeHeight / 2).coerceAtMost(imageHeight)
+                                    
+                                    Log.d(TAG, "REWE TYPE_2 (landscape mode): Aztec barcode - PIN search LEFT of barcode")
+                                }
                             }
                         }
                     }
@@ -933,6 +995,9 @@ class ScannerActivity : AppCompatActivity() {
                     finalBottom
                 )
                 
+                // Store PIN search region for display (in ML Kit coordinate system)
+                pinSearchRegion = pinRegion
+                
                 Log.d(TAG, "=== PIN REGION DEBUG ===")
                 Log.d(TAG, "Market type: $marketType")
                 when (marketType) {
@@ -948,199 +1013,84 @@ class ScannerActivity : AppCompatActivity() {
                 Log.d(TAG, "Rotation degrees: $rotationDegrees")
                 Log.d(TAG, "========================")
                 
-                // Convert Image to Bitmap, rotate to match InputImage orientation, then crop
+                // Convert Image to Bitmap - keep in original sensor orientation
+                // The text on the card is always upright, so we crop from the original bitmap
+                // and transform ML Kit coordinates to match the bitmap's sensor orientation
                 val bitmap = imageToBitmap(mediaImage)
                 if (bitmap != null) {
-                    // Rotate bitmap to match InputImage orientation (ML Kit coordinate system)
-                    // This way we can use ML Kit coordinates directly without transformation
-                    val rotatedBitmap = if (rotationDegrees != 0) {
-                        rotateBitmap(bitmap, rotationDegrees)
-                    } else {
-                        bitmap
-                    }
-                    
                     try {
+                        // Transform ML Kit coordinates to original bitmap coordinates
+                        // ML Kit coordinates are relative to display orientation, but bitmap is in sensor orientation
+                        val (cropCoords, cropSize) = transformCoordinatesForRotation(
+                            finalLeft, finalTop, pinRegion.width(), pinRegion.height(),
+                            bitmap.width, bitmap.height,
+                            rotationDegrees
+                        )
                         
-                        // Now use ML Kit coordinates directly (they're relative to the rotated bitmap)
-                        val cropLeft = finalLeft.coerceIn(0, rotatedBitmap.width - 1)
-                        val cropTop = finalTop.coerceIn(0, rotatedBitmap.height - 1)
-                        val cropWidth = pinRegion.width().coerceIn(1, rotatedBitmap.width - cropLeft)
-                        val cropHeight = pinRegion.height().coerceIn(1, rotatedBitmap.height - cropTop)
+                        val cropLeft = cropCoords.first.coerceIn(0, bitmap.width - 1)
+                        val cropTop = cropCoords.second.coerceIn(0, bitmap.height - 1)
+                        val cropWidth = cropSize.first.coerceIn(1, bitmap.width - cropLeft)
+                        val cropHeight = cropSize.second.coerceIn(1, bitmap.height - cropTop)
                         
-                        Log.d(TAG, "Crop region (using ML Kit coordinates directly): left=$cropLeft, top=$cropTop, width=$cropWidth, height=$cropHeight")
-                        Log.d(TAG, "Rotated bitmap dimensions: ${rotatedBitmap.width}x${rotatedBitmap.height}")
-                        Log.d(TAG, "ML Kit image dimensions: ${imageWidth}x${imageHeight}")
+                        Log.d(TAG, "Crop region (original bitmap): left=$cropLeft, top=$cropTop, width=$cropWidth, height=$cropHeight")
+                        Log.d(TAG, "Original bitmap dimensions: ${bitmap.width}x${bitmap.height}")
+                        Log.d(TAG, "ML Kit coordinates: left=$finalLeft, top=$finalTop, width=${pinRegion.width()}, height=${pinRegion.height()}, rotation=$rotationDegrees")
                         
-                        // Crop bitmap to PIN region (using ML Kit coordinates directly)
+                        // Crop from ORIGINAL bitmap (sensor orientation)
+                        // The text on the card is upright, but the cropped region might be rotated
+                        // due to sensor orientation, so we'll try different rotations in OCR
                         val croppedBitmap = Bitmap.createBitmap(
-                            rotatedBitmap,
+                            bitmap,
                             cropLeft,
                             cropTop,
                             cropWidth,
                             cropHeight
                         )
                         
-                        // Create InputImage from cropped bitmap with rotation 0
-                        // The bitmap is already rotated to match ML Kit's coordinate system
-                        val croppedImage = InputImage.fromBitmap(croppedBitmap, 0)
-                        
-                        // Process cropped region for PIN
-                        textRecognizer.process(croppedImage)
-                            .addOnSuccessListener { visionText ->
-                                Log.d(TAG, "=== OCR RESULTS FOR PIN REGION ===")
-                                Log.d(TAG, "Text blocks found: ${visionText.textBlocks.size}")
-                                val recognizedText = visionText.text
-                                Log.d(TAG, "Full recognized text: '$recognizedText'")
-                                
-                                // Log all text blocks in detail for debugging
-                                visionText.textBlocks.forEachIndexed { blockIdx, block ->
-                                    Log.d(TAG, "Block $blockIdx: '${block.text}' (${block.lines.size} lines)")
-                                    block.lines.forEachIndexed { lineIdx, line ->
-                                        Log.d(TAG, "  Line $lineIdx: '${line.text}' (${line.elements.size} elements)")
-                                        line.elements.forEachIndexed { elemIdx, element ->
-                                            Log.d(TAG, "    Element $elemIdx: '${element.text}' at ${element.boundingBox}")
-                                        }
-                                    }
-                                }
-                                
-                                val potentialPin = extractPotentialPin(recognizedText)
-                                Log.d(TAG, "Extracted PIN: $potentialPin")
-                                Log.d(TAG, "===================================")
-                                
-                                // Clean up bitmaps
-                                if (!croppedBitmap.isRecycled) {
-                                    croppedBitmap.recycle()
-                                }
-                                if (rotatedBitmap != bitmap && !rotatedBitmap.isRecycled) {
-                                    rotatedBitmap.recycle()
-                                }
-                                if (!bitmap.isRecycled) {
-                                    bitmap.recycle()
-                                }
-                                
-                                if (potentialPin != null) {
-                                    // Validate PIN before returning it - reject false positives
-                                    if (isLikelyFalsePositive(potentialPin)) {
-                                        Log.d(TAG, "Rejected likely false positive PIN from region: $potentialPin")
-                                        // For Lidl cards, don't fallback if we get a false positive
-                                        if (marketType == MarketType.LIDL) {
-                                            Log.d(TAG, "Lidl card: False positive detected, not searching full image")
-                                            onComplete(null, null)
-                                        } else {
-                                            // For other cards, try full image fallback
-                                            val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                                            processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
-                                        }
+                        // Try OCR with multiple orientations
+                        // The text is upright on the card, but the cropped region orientation
+                        // depends on sensor orientation, so we try different rotations to find the best one
+                        processCroppedBitmapWithMultipleOrientations(croppedBitmap) { pin, pinBox ->
+                            // Clean up bitmaps
+                            if (!croppedBitmap.isRecycled) {
+                                croppedBitmap.recycle()
+                            }
+                            if (!bitmap.isRecycled) {
+                                bitmap.recycle()
+                            }
+                            
+                            if (pin != null) {
+                                // Validate PIN before returning it - reject false positives
+                                if (isLikelyFalsePositive(pin)) {
+                                    Log.d(TAG, "Rejected likely false positive PIN from region: $pin")
+                                    // For Lidl cards, don't fallback if we get a false positive
+                                    if (marketType == MarketType.LIDL) {
+                                        Log.d(TAG, "Lidl card: False positive detected, not searching full image")
+                                        onComplete(null, null)
                                     } else {
-                                        Log.d(TAG, "PIN detected (region-of-interest): $potentialPin")
-                                        onComplete(potentialPin, pinRegion)
-                                    }
-                                } else {
-                                    Log.d(TAG, "No PIN found in region")
-                                    Log.d(TAG, "Recognized text in region was: '$recognizedText'")
-                                    
-                                    // For REWE cards, try a wider search area as fallback
-                                    // Search the entire left half of the image if initial region didn't work
-                                    if (marketType == MarketType.REWE) {
-                                        Log.d(TAG, "REWE card: No PIN found in initial left region, trying wider left-side search")
-                                        
-                                        // Create a much wider region covering entire left half
-                                        val widerLeftRegion = Rect(
-                                            0,  // Start from left edge
-                                            0,  // Start from top
-                                            barcodeBox.left,  // Up to barcode
-                                            imageHeight  // Full height
-                                        )
-                                        
-                                        // Crop and process wider region
-                                        try {
-                                            // Use ML Kit coordinates directly (bitmap is already rotated)
-                                            val widerCropLeft = widerLeftRegion.left.coerceIn(0, rotatedBitmap.width - 1)
-                                            val widerCropTop = widerLeftRegion.top.coerceIn(0, rotatedBitmap.height - 1)
-                                            val widerCropWidth = widerLeftRegion.width().coerceIn(1, rotatedBitmap.width - widerCropLeft)
-                                            val widerCropHeight = widerLeftRegion.height().coerceIn(1, rotatedBitmap.height - widerCropTop)
-                                            
-                                            val widerCroppedBitmap = Bitmap.createBitmap(
-                                                rotatedBitmap,
-                                                widerCropLeft,
-                                                widerCropTop,
-                                                widerCropWidth,
-                                                widerCropHeight
-                                            )
-                                            
-                                            // Create InputImage from cropped bitmap with rotation 0
-                                            // The bitmap is already rotated to match ML Kit's coordinate system
-                                            val widerCroppedImage = InputImage.fromBitmap(widerCroppedBitmap, 0)
-                                            
-                                            textRecognizer.process(widerCroppedImage)
-                                                .addOnSuccessListener { widerVisionText ->
-                                                    val widerText = widerVisionText.text
-                                                    Log.d(TAG, "Wider region OCR result: '$widerText'")
-                                                    val widerPin = extractPotentialPin(widerText)
-                                                    
-                                                    // Clean up bitmaps
-                                                    if (!widerCroppedBitmap.isRecycled) {
-                                                        widerCroppedBitmap.recycle()
-                                                    }
-                                                    
-                                                    if (widerPin != null && !isLikelyFalsePositive(widerPin)) {
-                                                        Log.d(TAG, "PIN found in wider region: $widerPin")
-                                                        onComplete(widerPin, widerLeftRegion)
-                                                    } else {
-                                                        Log.d(TAG, "REWE card: No valid PIN found even in wider left region")
-                                                        onComplete(null, null)
-                                                    }
-                                                }
-                                                .addOnFailureListener { e ->
-                                                    Log.e(TAG, "Wider region OCR failed", e)
-                                                    // Clean up bitmaps
-                                                    if (!widerCroppedBitmap.isRecycled) {
-                                                        widerCroppedBitmap.recycle()
-                                                    }
-                                                    onComplete(null, null)
-                                                }
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "Error processing wider region", e)
-                                            onComplete(null, null)
-                                        }
-                                    } else {
-                                        Log.d(TAG, "Trying full image as fallback for non-REWE card")
+                                        // For other cards, try full image fallback
                                         val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                                        processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
+                                        processPinFullImageWithBox(fullImage) { fallbackPin, _ -> onComplete(fallbackPin, null) }
                                     }
-                                }
-                            }
-                            .addOnFailureListener { e ->
-                                Log.e(TAG, "Text recognition on PIN region failed", e)
-                                // Clean up bitmaps
-                                if (!croppedBitmap.isRecycled) {
-                                    croppedBitmap.recycle()
-                                }
-                                if (rotatedBitmap != bitmap && !rotatedBitmap.isRecycled) {
-                                    rotatedBitmap.recycle()
-                                }
-                                if (!bitmap.isRecycled) {
-                                    bitmap.recycle()
-                                }
-                                // Fallback to full image (but not for REWE cards to avoid false positives)
-                                if (marketType == MarketType.REWE) {
-                                    Log.d(TAG, "REWE card: OCR failed in left region, not searching full image to avoid false positives")
-                                    onComplete(null, null)
                                 } else {
-                                    val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                                    processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
+                                    Log.d(TAG, "PIN detected (region-of-interest): $pin")
+                                    onComplete(pin, pinRegion)
                                 }
+                            } else {
+                                // No PIN found, continue with fallback logic below
+                                handlePinNotFoundInRegion(mediaImage, rotationDegrees, marketType, barcodeBox, imageWidth, imageHeight, bitmap, pinRegion, onComplete)
                             }
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error cropping bitmap", e)
                         // Clean up original bitmap
                         if (!bitmap.isRecycled) {
                             bitmap.recycle()
                         }
-                            // Fallback to full image
-                            val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                            processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
-                        }
+                        // Fallback to full image
+                        val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
+                        processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
+                    }
                 } else {
                     Log.w(TAG, "Failed to convert image to bitmap, using full image")
                     val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
@@ -1149,6 +1099,191 @@ class ScannerActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing PIN region", e)
                 // Fallback to full image
+                val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
+                processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
+            }
+        }
+        
+        /**
+         * Process cropped bitmap with multiple orientations to improve OCR reliability.
+         * Tries multiple rotations to find the best text recognition result.
+         * Prioritizes orientations that work well for portrait mode (90° counter-clockwise = 270° clockwise).
+         */
+        private fun processCroppedBitmapWithMultipleOrientations(
+            croppedBitmap: Bitmap,
+            onComplete: (String?, Rect?) -> Unit
+        ) {
+            // Try orientations in order of likelihood:
+            // 1. 270° (90° counter-clockwise) - works well when phone is rotated
+            // 2. 0° (original orientation)
+            // 3. 90° (90° clockwise)
+            // 4. 180° (upside down)
+            val orientations = listOf(270, 0, 90, 180)
+            var attemptsCompleted = 0
+            var bestPin: String? = null
+            var bestPinBox: Rect? = null
+            
+            fun tryNextOrientation() {
+                if (attemptsCompleted >= orientations.size) {
+                    // All orientations tried, return best result
+                    onComplete(bestPin, bestPinBox)
+                    return
+                }
+                
+                val rotation = orientations[attemptsCompleted]
+                attemptsCompleted++
+                
+                // Rotate bitmap if needed
+                val orientedBitmap = if (rotation != 0) {
+                    rotateBitmap(croppedBitmap, rotation)
+                } else {
+                    croppedBitmap
+                }
+                
+                // Create InputImage with rotation 0 (bitmap is already rotated)
+                val inputImage = InputImage.fromBitmap(orientedBitmap, 0)
+                
+                Log.d(TAG, "Trying OCR with rotation: ${rotation}°")
+                
+                textRecognizer.process(inputImage)
+                    .addOnSuccessListener { visionText ->
+                        val recognizedText = visionText.text
+                        Log.d(TAG, "OCR result at ${rotation}°: '$recognizedText'")
+                        
+                        val potentialPin = extractPotentialPin(recognizedText)
+                        
+                        // Clean up rotated bitmap if we created one
+                        if (rotation != 0 && orientedBitmap != croppedBitmap && !orientedBitmap.isRecycled) {
+                            orientedBitmap.recycle()
+                        }
+                        
+                        if (potentialPin != null && !isLikelyFalsePositive(potentialPin)) {
+                            // Found a valid PIN, use this result
+                            Log.d(TAG, "Found valid PIN at ${rotation}°: $potentialPin")
+                            bestPin = potentialPin
+                            bestPinBox = null // We don't have precise bounding box for rotated versions
+                            // Don't try other orientations, we found a good result
+                            onComplete(bestPin, bestPinBox)
+                        } else {
+                            // Try next orientation
+                            tryNextOrientation()
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.d(TAG, "OCR failed at ${rotation}°: ${e.message}")
+                        // Clean up rotated bitmap if we created one
+                        if (rotation != 0 && orientedBitmap != croppedBitmap && !orientedBitmap.isRecycled) {
+                            orientedBitmap.recycle()
+                        }
+                        // Try next orientation
+                        tryNextOrientation()
+                    }
+            }
+            
+            // Start trying orientations
+            tryNextOrientation()
+        }
+        
+        /**
+         * Handle case when PIN is not found in the initial region.
+         * Uses rotation-aware fallback strategy.
+         */
+        private fun handlePinNotFoundInRegion(
+            mediaImage: Image,
+            rotationDegrees: Int,
+            marketType: MarketType,
+            barcodeBox: Rect,
+            imageWidth: Int,
+            imageHeight: Int,
+            bitmap: Bitmap,
+            pinRegion: Rect,
+            onComplete: (String?, Rect?) -> Unit
+        ) {
+            Log.d(TAG, "No PIN found in initial region, trying fallback")
+            
+            if (marketType == MarketType.REWE) {
+                val cardType = detectedReweCardType ?: ReweCardType.TYPE_1
+                val isPortraitMode = rotationDegrees == 90 || rotationDegrees == 270
+                
+                // Try a wider search region around the barcode
+                Log.d(TAG, "REWE: Trying wider search region (rotation=$rotationDegrees, isPortrait=$isPortraitMode)")
+                
+                val barcodeWidth = barcodeBox.width()
+                val barcodeHeight = barcodeBox.height()
+                
+                // Create a larger search region that includes both above AND to the left of barcode
+                // This handles the case where the card might be rotated differently than expected
+                val widerRegion: Rect
+                
+                if (isPortraitMode) {
+                    // Portrait mode: search both above barcode AND a bit to the sides
+                    val searchHeight = (barcodeHeight * 3).coerceAtMost(barcodeBox.top)
+                    widerRegion = Rect(
+                        (barcodeBox.left - barcodeWidth).coerceAtLeast(0),
+                        (barcodeBox.top - searchHeight).coerceAtLeast(0),
+                        (barcodeBox.right + barcodeWidth).coerceAtMost(imageWidth),
+                        barcodeBox.centerY() // Include part of barcode area
+                    )
+                } else {
+                    // Landscape mode: search to the left of barcode and a bit above/below
+                    val searchWidth = (barcodeWidth * 3).coerceAtMost(barcodeBox.left)
+                    widerRegion = Rect(
+                        (barcodeBox.left - searchWidth).coerceAtLeast(0),
+                        (barcodeBox.top - barcodeHeight).coerceAtLeast(0),
+                        barcodeBox.centerX(), // Include part of barcode area
+                        (barcodeBox.bottom + barcodeHeight).coerceAtMost(imageHeight)
+                    )
+                }
+                
+                Log.d(TAG, "Wider search region: left=${widerRegion.left}, top=${widerRegion.top}, right=${widerRegion.right}, bottom=${widerRegion.bottom}")
+                
+                if (widerRegion.width() > 0 && widerRegion.height() > 0) {
+                    try {
+                        val (widerCropCoords, widerCropSize) = transformCoordinatesForRotation(
+                            widerRegion.left, widerRegion.top, 
+                            widerRegion.width(), widerRegion.height(),
+                            bitmap.width, bitmap.height,
+                            rotationDegrees
+                        )
+                        
+                        val widerCropLeft = widerCropCoords.first.coerceIn(0, bitmap.width - 1)
+                        val widerCropTop = widerCropCoords.second.coerceIn(0, bitmap.height - 1)
+                        val widerCropWidth = widerCropSize.first.coerceIn(1, bitmap.width - widerCropLeft)
+                        val widerCropHeight = widerCropSize.second.coerceIn(1, bitmap.height - widerCropTop)
+                        
+                        Log.d(TAG, "Wider crop: left=$widerCropLeft, top=$widerCropTop, width=$widerCropWidth, height=$widerCropHeight")
+                        
+                        val widerCroppedBitmap = Bitmap.createBitmap(
+                            bitmap,
+                            widerCropLeft,
+                            widerCropTop,
+                            widerCropWidth,
+                            widerCropHeight
+                        )
+                        
+                        processCroppedBitmapWithMultipleOrientations(widerCroppedBitmap) { widerPin, _ ->
+                            if (!widerCroppedBitmap.isRecycled) {
+                                widerCroppedBitmap.recycle()
+                            }
+                            
+                            if (widerPin != null && !isLikelyFalsePositive(widerPin)) {
+                                Log.d(TAG, "PIN found in wider region: $widerPin")
+                                onComplete(widerPin, widerRegion)
+                            } else {
+                                Log.d(TAG, "REWE: No valid PIN found in wider region either")
+                                onComplete(null, null)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing wider region", e)
+                        onComplete(null, null)
+                    }
+                } else {
+                    Log.d(TAG, "REWE: Wider region has zero dimensions, giving up")
+                    onComplete(null, null)
+                }
+            } else {
+                Log.d(TAG, "Trying full image as fallback for non-REWE card")
                 val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
                 processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
             }
@@ -1193,49 +1328,89 @@ class ScannerActivity : AppCompatActivity() {
 
         /**
          * Transform coordinates based on image rotation.
-         * ML Kit coordinates are relative to the rotated image, but the bitmap is in native orientation.
-         * This function transforms the coordinates to match the bitmap orientation.
          * 
-         * For portrait mode (90° or 270°), the image is rotated, so coordinates need to be transformed.
+         * ML Kit provides coordinates in a "display-corrected" coordinate system where
+         * (0,0) is the top-left corner of how the image would be displayed upright on screen.
+         * 
+         * The native bitmap from the camera sensor is NOT rotated - it's always in sensor orientation.
+         * For most phones, the sensor captures images in landscape orientation.
+         * 
+         * This function transforms ML Kit coordinates back to native bitmap coordinates.
+         * 
+         * @param left, top, width, height - coordinates in ML Kit's rotated space
+         * @param bitmapWidth, bitmapHeight - dimensions of the NATIVE (unrotated) bitmap
+         * @param rotationDegrees - the rotation that ML Kit applied to get display coordinates
+         * 
+         * Note: ML Kit's imageWidth/imageHeight are AFTER rotation correction (swapped for 90°/270°)
+         * but bitmapWidth/bitmapHeight are the NATIVE sensor dimensions (before rotation).
          */
         private fun transformCoordinatesForRotation(
             left: Int, top: Int, width: Int, height: Int,
             bitmapWidth: Int, bitmapHeight: Int,
             rotationDegrees: Int
         ): Pair<Pair<Int, Int>, Pair<Int, Int>> {
+            // For rotations, we need to consider that:
+            // - Native bitmap: bitmapWidth x bitmapHeight (sensor dimensions, typically landscape)
+            // - ML Kit coords: after rotation, so dimensions are potentially swapped
+            
+            // Calculate ML Kit's effective dimensions (what ML Kit thinks the image size is)
+            val mlKitWidth: Int
+            val mlKitHeight: Int
+            if (rotationDegrees == 90 || rotationDegrees == 270) {
+                // ML Kit swaps dimensions for portrait rotation
+                mlKitWidth = bitmapHeight
+                mlKitHeight = bitmapWidth
+            } else {
+                mlKitWidth = bitmapWidth
+                mlKitHeight = bitmapHeight
+            }
+            
+            // Scale factors if ML Kit dimensions differ from bitmap
+            // (This handles potential resolution differences)
+            val scaleX = bitmapWidth.toFloat() / if (rotationDegrees == 90 || rotationDegrees == 270) mlKitHeight else mlKitWidth
+            val scaleY = bitmapHeight.toFloat() / if (rotationDegrees == 90 || rotationDegrees == 270) mlKitWidth else mlKitHeight
+            
+            Log.d(TAG, "transformCoordinates: rotation=$rotationDegrees, bitmap=${bitmapWidth}x${bitmapHeight}, mlKit=${mlKitWidth}x${mlKitHeight}")
+            Log.d(TAG, "transformCoordinates: input left=$left, top=$top, width=$width, height=$height")
+            
             return when (rotationDegrees) {
                 90 -> {
-                    // 90° clockwise rotation (portrait mode)
-                    // ML Kit rotates image 90° clockwise, so coordinates need inverse transformation
-                    // In ML Kit rotated space: (left, top) maps to native bitmap's (bitmapHeight - top - height, left)
-                    // For 90° clockwise rotation:
-                    // - ML Kit's left (x) becomes native's top (y), but inverted: bitmapHeight - top - height
-                    // - ML Kit's top (y) becomes native's left (x): left
-                    val newLeft = bitmapHeight - top - height
-                    val newTop = left
-                    val newWidth = height
+                    // 90° clockwise: ML Kit's origin is at bitmap's top-right corner (rotated)
+                    // ML Kit x -> Bitmap y (from top)
+                    // ML Kit y -> Bitmap x (from right edge, inverted)
+                    // 
+                    // To reverse 90° clockwise rotation:
+                    // bitmap_x = mlKit_y (but from the bottom of ML Kit space)
+                    // bitmap_y = mlKit_x
+                    val newLeft = top  // ML Kit's Y becomes bitmap's X
+                    val newTop = bitmapHeight - left - width  // ML Kit's X becomes bitmap's Y (inverted)
+                    val newWidth = height  // Swap width/height
                     val newHeight = width
+                    Log.d(TAG, "transformCoordinates 90°: output left=$newLeft, top=$newTop, width=$newWidth, height=$newHeight")
                     Pair(Pair(newLeft, newTop), Pair(newWidth, newHeight))
                 }
                 180 -> {
-                    // 180° rotation
-                    // (x, y) -> (bitmapWidth - x - w, bitmapHeight - y - h)
+                    // 180° rotation: both axes inverted
                     val newLeft = bitmapWidth - left - width
                     val newTop = bitmapHeight - top - height
+                    Log.d(TAG, "transformCoordinates 180°: output left=$newLeft, top=$newTop")
                     Pair(Pair(newLeft, newTop), Pair(width, height))
                 }
                 270 -> {
-                    // 270° clockwise rotation (portrait mode, other orientation)
-                    // ML Kit rotates image 270° clockwise (or 90° counter-clockwise)
-                    // Inverse transformation: (top, bitmapWidth - left - width)
-                    val newLeft = top
-                    val newTop = bitmapWidth - left - width
-                    val newWidth = height
+                    // 270° clockwise (= 90° counter-clockwise)
+                    // ML Kit's origin is at bitmap's bottom-left corner (rotated)
+                    // ML Kit x -> Bitmap y (from bottom, inverted)  
+                    // ML Kit y -> Bitmap x (from left)
+                    val newLeft = bitmapWidth - top - height  // ML Kit's Y becomes bitmap's X (inverted)
+                    val newTop = left  // ML Kit's X becomes bitmap's Y
+                    val newWidth = height  // Swap width/height
                     val newHeight = width
+                    Log.d(TAG, "transformCoordinates 270°: output left=$newLeft, top=$newTop, width=$newWidth, height=$newHeight")
                     Pair(Pair(newLeft, newTop), Pair(newWidth, newHeight))
                 }
                 else -> {
                     // 0° or no rotation: coordinates stay the same
+                    Log.d(TAG, "transformCoordinates 0°: no change")
                     Pair(Pair(left, top), Pair(width, height))
                 }
             }

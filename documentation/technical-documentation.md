@@ -126,16 +126,23 @@ Uses CameraX with ML Kit Barcode Scanner with enhanced distance scanning:
 ### OCR PIN Capture
 
 #### ScannerActivity (Automatic PIN Detection)
-Uses region-of-interest (ROI) detection for improved accuracy:
+Uses rotation-aware region-of-interest (ROI) detection for improved accuracy:
 
 1. **Barcode Detection**: First detects barcode and extracts bounding box
-2. **PIN Region Calculation**: 
-   - Calculates upper-right corner region (40% width, 50% height)
-   - PIN is typically located in upper-right corner of barcode
-3. **Image Cropping**: Crops image to PIN region before OCR
-4. **Text Recognition**: Processes cropped region with ML Kit Text Recognition
-5. **Fallback**: If ROI detection fails, falls back to full-image OCR
-6. **Visual Highlight**: Blue overlay shows detected PIN region
+2. **Rotation Detection**: Determines phone orientation from `imageProxy.imageInfo.rotationDegrees`
+3. **PIN Region Calculation** (rotation-aware):
+   - For **REWE cards**: PIN is physically to the LEFT of barcode on the card
+   - In **portrait mode** (90°/270° rotation): "left of barcode" maps to ABOVE barcode in ML Kit coords
+   - In **landscape mode** (0°/180° rotation): "left of barcode" maps to left of barcode in ML Kit coords
+   - For **LIDL cards**: PIN is in upper-right corner, calculated relative to barcode position
+4. **Coordinate Transformation**: 
+   - ML Kit provides coordinates in display-corrected space (rotation applied)
+   - Native bitmap from camera is in sensor orientation (not rotated)
+   - `transformCoordinatesForRotation()` converts ML Kit coords to bitmap coords for cropping
+5. **Image Cropping**: Crops native bitmap to transformed PIN region
+6. **Multi-Orientation OCR**: Tries 4 rotations (270°, 0°, 90°, 180°) on cropped region
+7. **Fallback Strategy**: If initial region fails, tries wider rotation-aware region
+8. **Visual Highlight**: Blue overlay shows detected PIN region
 
 #### PinEntryActivity (Manual PIN Capture)
 Uses CameraX with ML Kit Text Recognition:
@@ -282,6 +289,29 @@ var balancePatterns = [
 - Calculates scale factors based on aspect ratio differences
 - Handles letterboxing and pillarboxing correctly
 - Proper elevation and z-ordering for highlight overlays
+
+### v1.5 - Rotation-Aware PIN Detection for REWE
+
+**Problem Solved:**
+REWE gift cards require landscape card orientation to scan the barcode, but the app runs in portrait mode. The PIN field is physically to the LEFT of the barcode on the card, but due to rotation transformations, this appears in different positions in the ML Kit coordinate system.
+
+**Solution:**
+1. **Rotation Detection**: Check `rotationDegrees` from `imageProxy.imageInfo` to determine phone orientation
+2. **Rotation-Aware Region Calculation**:
+   - Portrait mode (90°/270°): Search ABOVE barcode in ML Kit coords (maps to left side of physical card)
+   - Landscape mode (0°/180°): Search LEFT of barcode in ML Kit coords
+3. **Fixed Coordinate Transformation**: `transformCoordinatesForRotation()` now correctly handles:
+   - 90° clockwise: ML Kit Y → Bitmap X, ML Kit X → Bitmap Y (inverted)
+   - 270° clockwise: ML Kit Y → Bitmap X (inverted), ML Kit X → Bitmap Y
+   - Proper dimension swapping for cropped regions
+4. **Rotation-Aware Fallback**: Wider search region also uses rotation-aware positioning
+
+**Coordinate System Reference:**
+- Camera sensor captures in landscape (e.g., 1920x1080)
+- For portrait mode, CameraX rotates preview to match display
+- ML Kit receives rotation info and provides coordinates in display space
+- Native bitmap from `mediaImage` is still in sensor orientation
+- Must transform ML Kit coords back to bitmap coords for cropping
 
 ### v1.2 - Native Touch Simulation for CAPTCHA Focus
 - **Native Android Touch Events**: Uses MotionEvent.obtain() to simulate touch at CAPTCHA coordinates
