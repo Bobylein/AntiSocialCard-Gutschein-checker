@@ -578,6 +578,11 @@ class BalanceCheckActivity : AppCompatActivity() {
                     }
                     
                     Log.d(TAG, "Form fields filled successfully. User will submit manually after entering CAPTCHA.")
+                    
+                    // Try to focus CAPTCHA field from Android side as well (backup to JavaScript focus)
+                    handler.postDelayed({
+                        focusCaptchaField()
+                    }, 1000) // Wait 1 second for page to stabilize
                 } else {
                     // Form fields not found, retry with longer delay
                     pageLoadAttempts++
@@ -1387,6 +1392,85 @@ class BalanceCheckActivity : AppCompatActivity() {
                     binding.webView.loadUrl(fallbackUrl)
                 }
             }
+        }
+    }
+
+    /**
+     * Attempts to focus the CAPTCHA input field using JavaScript.
+     * This is called after form auto-fill as a backup to ensure the keyboard opens.
+     */
+    private fun focusCaptchaField() {
+        val script = """
+            (function() {
+                function focusCaptcha() {
+                    // Try to find CAPTCHA input in main document
+                    var captchaInput = document.querySelector('input[name="input"]');
+                    
+                    if (captchaInput) {
+                        try {
+                            captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            captchaInput.focus();
+                            captchaInput.click();
+                            
+                            // Dispatch focus event
+                            var focusEvent = new Event('focus', { bubbles: true, cancelable: true });
+                            captchaInput.dispatchEvent(focusEvent);
+                            
+                            return true;
+                        } catch(e) {
+                            return false;
+                        }
+                    }
+                    
+                    // Try to find in iframe
+                    try {
+                        var iframes = document.querySelectorAll('iframe');
+                        for (var i = 0; i < iframes.length; i++) {
+                            try {
+                                var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+                                if (iframeDoc) {
+                                    var iframeCaptcha = iframeDoc.querySelector('input[name="input"]');
+                                    if (iframeCaptcha) {
+                                        iframeCaptcha.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        iframeCaptcha.focus();
+                                        iframeCaptcha.click();
+                                        
+                                        var focusEvent = new Event('focus', { bubbles: true, cancelable: true });
+                                        iframeCaptcha.dispatchEvent(focusEvent);
+                                        
+                                        return true;
+                                    }
+                                }
+                            } catch(e) {
+                                // Cross-origin, skip
+                            }
+                        }
+                    } catch(e) {}
+                    
+                    return false;
+                }
+                
+                // Try multiple times with delays
+                var attempts = 0;
+                var maxAttempts = 3;
+                
+                function tryFocus() {
+                    attempts++;
+                    if (focusCaptcha()) {
+                        if (typeof Android !== 'undefined' && Android.log) {
+                            Android.log('CAPTCHA focused from Android side');
+                        }
+                    } else if (attempts < maxAttempts) {
+                        setTimeout(tryFocus, 500);
+                    }
+                }
+                
+                tryFocus();
+            })();
+        """.trimIndent()
+        
+        binding.webView.evaluateJavascript(script) { result ->
+            Log.d(TAG, "CAPTCHA focus attempt result: $result")
         }
     }
 

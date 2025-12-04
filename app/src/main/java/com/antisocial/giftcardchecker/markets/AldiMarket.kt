@@ -269,6 +269,76 @@ class AldiMarket : Market() {
                     result.captchaFound = captchaInputDirect !== null;
                     result.success = result.gutscheinFound && result.pinFound;
                     
+                    // Focus on CAPTCHA field to open keyboard after auto-fill
+                    if (result.success && captchaInputDirect) {
+                        // Use multiple attempts with increasing delays to ensure focus works
+                        var focusAttempts = 0;
+                        var maxFocusAttempts = 5;
+                        
+                        function tryFocusCaptcha() {
+                            focusAttempts++;
+                            try {
+                                // Check if field is ready (visible, enabled, not disabled)
+                                var isReady = captchaInputDirect.offsetParent !== null &&
+                                             !captchaInputDirect.disabled &&
+                                             captchaInputDirect.style.display !== 'none' &&
+                                             captchaInputDirect.style.visibility !== 'hidden';
+                                
+                                if (isReady) {
+                                    // Scroll into view first
+                                    captchaInputDirect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    
+                                    // Try focus and click multiple times
+                                    captchaInputDirect.focus();
+                                    captchaInputDirect.click();
+                                    
+                                    // Dispatch focus events
+                                    var focusEvent = new Event('focus', { bubbles: true, cancelable: true });
+                                    captchaInputDirect.dispatchEvent(focusEvent);
+                                    
+                                    // Also try touch events for mobile (if supported)
+                                    try {
+                                        if (typeof TouchEvent !== 'undefined') {
+                                            var touchStart = new TouchEvent('touchstart', { bubbles: true, cancelable: true });
+                                            var touchEnd = new TouchEvent('touchend', { bubbles: true, cancelable: true });
+                                            captchaInputDirect.dispatchEvent(touchStart);
+                                            captchaInputDirect.dispatchEvent(touchEnd);
+                                        } else {
+                                            // Fallback to mouse events for mobile WebView
+                                            var mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+                                            var mouseUp = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+                                            captchaInputDirect.dispatchEvent(mouseDown);
+                                            captchaInputDirect.dispatchEvent(mouseUp);
+                                        }
+                                    } catch(e) {}
+                                    
+                                    // Verify focus worked
+                                    setTimeout(function() {
+                                        if (document.activeElement === captchaInputDirect) {
+                                            // Success - field is focused
+                                            if (typeof Android !== 'undefined' && Android.log) {
+                                                Android.log('CAPTCHA field focused successfully');
+                                            }
+                                        } else if (focusAttempts < maxFocusAttempts) {
+                                            // Retry if not focused yet
+                                            setTimeout(tryFocusCaptcha, 200);
+                                        }
+                                    }, 100);
+                                } else if (focusAttempts < maxFocusAttempts) {
+                                    // Field not ready yet, retry
+                                    setTimeout(tryFocusCaptcha, 300);
+                                }
+                            } catch(e) {
+                                if (focusAttempts < maxFocusAttempts) {
+                                    setTimeout(tryFocusCaptcha, 300);
+                                }
+                            }
+                        }
+                        
+                        // Start focusing after a short delay
+                        setTimeout(tryFocusCaptcha, 500);
+                    }
+                    
                     // Get all inputs for debugging
                     var allInputs = document.querySelectorAll('input');
                     for (var i = 0; i < allInputs.length; i++) {
@@ -431,6 +501,68 @@ class AldiMarket : Market() {
                             
                             result.captchaFound = captchaInput !== null;
                             result.success = result.gutscheinFound && result.pinFound;
+                            
+                            // Focus on CAPTCHA field to open keyboard after auto-fill
+                            if (result.success && captchaInput) {
+                                // Use multiple attempts with increasing delays to ensure focus works
+                                var focusAttempts = 0;
+                                var maxFocusAttempts = 5;
+                                
+                                function tryFocusCaptcha() {
+                                    focusAttempts++;
+                                    try {
+                                        // Check if field is ready (visible, enabled, not disabled)
+                                        var isReady = captchaInput.offsetParent !== null &&
+                                                     !captchaInput.disabled &&
+                                                     captchaInput.style.display !== 'none' &&
+                                                     captchaInput.style.visibility !== 'hidden';
+                                        
+                                        if (isReady) {
+                                            // Scroll into view first
+                                            captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                            
+                                            // Try focus and click multiple times
+                                            captchaInput.focus();
+                                            captchaInput.click();
+                                            
+                                            // Dispatch focus events
+                                            var focusEvent = new Event('focus', { bubbles: true, cancelable: true });
+                                            captchaInput.dispatchEvent(focusEvent);
+                                            
+                                            // Also try touchstart/touchend for mobile
+                                            try {
+                                                var touchStart = new TouchEvent('touchstart', { bubbles: true, cancelable: true });
+                                                var touchEnd = new TouchEvent('touchend', { bubbles: true, cancelable: true });
+                                                captchaInput.dispatchEvent(touchStart);
+                                                captchaInput.dispatchEvent(touchEnd);
+                                            } catch(e) {}
+                                            
+                                            // Verify focus worked
+                                            setTimeout(function() {
+                                                if (iframeDoc.activeElement === captchaInput) {
+                                                    // Success - field is focused
+                                                    if (typeof Android !== 'undefined' && Android.log) {
+                                                        Android.log('CAPTCHA field focused successfully in iframe');
+                                                    }
+                                                } else if (focusAttempts < maxFocusAttempts) {
+                                                    // Retry if not focused yet
+                                                    setTimeout(tryFocusCaptcha, 200);
+                                                }
+                                            }, 100);
+                                        } else if (focusAttempts < maxFocusAttempts) {
+                                            // Field not ready yet, retry
+                                            setTimeout(tryFocusCaptcha, 300);
+                                        }
+                                    } catch(e) {
+                                        if (focusAttempts < maxFocusAttempts) {
+                                            setTimeout(tryFocusCaptcha, 300);
+                                        }
+                                    }
+                                }
+                                
+                                // Start focusing after a short delay
+                                setTimeout(tryFocusCaptcha, 500);
+                            }
                         }
                     } catch (e) {
                         // Cross-origin - we're probably on the direct URL, so fill form directly
@@ -518,6 +650,68 @@ class AldiMarket : Market() {
                 
                 result.captchaFound = captchaInput !== null;
                 result.success = result.gutscheinFound && result.pinFound;
+                
+                // Focus on CAPTCHA field to open keyboard after auto-fill
+                if (result.success && captchaInput) {
+                    // Use multiple attempts with increasing delays to ensure focus works
+                    var focusAttempts = 0;
+                    var maxFocusAttempts = 5;
+                    
+                    function tryFocusCaptcha() {
+                        focusAttempts++;
+                        try {
+                            // Check if field is ready (visible, enabled, not disabled)
+                            var isReady = captchaInput.offsetParent !== null &&
+                                         !captchaInput.disabled &&
+                                         captchaInput.style.display !== 'none' &&
+                                         captchaInput.style.visibility !== 'hidden';
+                            
+                            if (isReady) {
+                                // Scroll into view first
+                                captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                
+                                // Try focus and click multiple times
+                                captchaInput.focus();
+                                captchaInput.click();
+                                
+                                // Dispatch focus events
+                                var focusEvent = new Event('focus', { bubbles: true, cancelable: true });
+                                captchaInput.dispatchEvent(focusEvent);
+                                
+                                // Also try touchstart/touchend for mobile
+                                try {
+                                    var touchStart = new TouchEvent('touchstart', { bubbles: true, cancelable: true });
+                                    var touchEnd = new TouchEvent('touchend', { bubbles: true, cancelable: true });
+                                    captchaInput.dispatchEvent(touchStart);
+                                    captchaInput.dispatchEvent(touchEnd);
+                                } catch(e) {}
+                                
+                                // Verify focus worked
+                                setTimeout(function() {
+                                    if (document.activeElement === captchaInput) {
+                                        // Success - field is focused
+                                        if (typeof Android !== 'undefined' && Android.log) {
+                                            Android.log('CAPTCHA field focused successfully');
+                                        }
+                                    } else if (focusAttempts < maxFocusAttempts) {
+                                        // Retry if not focused yet
+                                        setTimeout(tryFocusCaptcha, 200);
+                                    }
+                                }, 100);
+                            } else if (focusAttempts < maxFocusAttempts) {
+                                // Field not ready yet, retry
+                                setTimeout(tryFocusCaptcha, 300);
+                            }
+                        } catch(e) {
+                            if (focusAttempts < maxFocusAttempts) {
+                                setTimeout(tryFocusCaptcha, 300);
+                            }
+                        }
+                    }
+                    
+                    // Start focusing after a short delay
+                    setTimeout(tryFocusCaptcha, 500);
+                }
                 
                 // Get all inputs for debugging
                 var allInputs = document.querySelectorAll('input');

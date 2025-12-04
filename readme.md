@@ -86,5 +86,9 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.1**: 
+  - Added ALDI page preloading to reduce blank page issues
+  - Improved CAPTCHA field focus with retry mechanism and keyboard opening
+  - Enhanced form auto-fill reliability with better field detection
 - **1.0**: Initial release with REWE and ALDI Nord support
 
