@@ -296,6 +296,23 @@ var balancePatterns = [
   - Multiple event dispatching (focus, click, mouse events)
   - Android-side backup focus method
 
+### v1.4 - Lidl Support and Error Message Fixes
+- **Lidl Market Implementation**: 
+  - Added LidlMarket class using same form provider as ALDI (tx-gate.com)
+  - Uses direct iframe URL loading: `balancechecks.tx-gate.com/balance.php?cid=79`
+  - Same form field selectors as ALDI (cardnumberfield, pin, input for CAPTCHA)
+  - 18-digit card number, 4-digit PIN format
+- **Error Message Handling**:
+  - Truncated console messages to 500 characters in logcat
+  - Truncated user-facing error messages to 200 characters
+  - Added safety checks for very long JSON responses (>50KB)
+  - Filters out navigation/cookie checkboxes from debug data collection
+  - Prevents huge JSON responses that cause parsing errors
+- **WebView Error Suppression**:
+  - Hides long error messages displayed in DOM for Lidl pages
+  - Uses MutationObserver to catch dynamically added error elements
+  - Detects and hides elements with error-like text (>500 chars)
+
 ## Future Improvements
 
 - Add more market implementations

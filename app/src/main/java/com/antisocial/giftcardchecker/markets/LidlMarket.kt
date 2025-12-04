@@ -9,9 +9,12 @@ import java.util.regex.Pattern
 /**
  * Market implementation for Lidl gift card balance checking.
  * Uses the lidl.de website for balance inquiries.
+ * 
+ * IMPORTANT: The balance check form is loaded in an iframe from tx-gate.com,
+ * similar to ALDI. We navigate directly to the iframe URL for form filling.
  *
  * Card format:
- * - Card number: 20 digits
+ * - Card number: 18 digits
  * - PIN: 4 digits
  */
 class LidlMarket : Market() {
@@ -23,244 +26,235 @@ class LidlMarket : Market() {
     override val balanceCheckUrl: String = "https://www.lidl.de/c/lidl-geschenkkarten/s10007775"
 
     override val brandColor: Int = Color.parseColor("#0050AA") // Lidl Blue
+    
+    // Lidl uses a cross-origin iframe from balancechecks.tx-gate.com (same as ALDI)
+    // The iframe URL that contains the actual form (cid=79 for Lidl)
+    val iframeFormUrl: String = "https://balancechecks.tx-gate.com/balance.php?cid=79"
 
     /**
      * JavaScript to fill in the card number and PIN fields on the Lidl balance check form.
-     * Tries multiple selector strategies to find form fields.
+     * Lidl uses the same iframe approach as ALDI (balancechecks.tx-gate.com with cid=79).
+     * This script uses the same selectors as ALDI since they use the same form provider.
      */
     override fun getFormFillScript(card: GiftCard): String {
+        // Use the same script as ALDI since they use the same form provider (tx-gate.com)
+        // Just adapt the field names if needed - but they should be the same
         return """
             (function() {
-                try {
-                    // Check if Android interface is available
-                    if (typeof Android === 'undefined') {
-                        return JSON.stringify({
-                            success: false,
-                            error: 'android_interface_not_available',
-                            cardNumberFound: false,
-                            pinFound: false,
-                            debug: {
-                                url: window.location.href,
-                                allInputs: [],
-                                foundInputs: []
-                            }
-                        });
+                var result = {
+                    success: false,
+                    cardNumberFound: false,
+                    pinFound: false,
+                    captchaFound: false,
+                    debug: {
+                        url: window.location.href,
+                        iframeFound: false,
+                        iframeUrl: null,
+                        iframeAccessible: false,
+                        error: null,
+                        allInputs: []
                     }
-                    
-                    var result = {
-                        success: false,
-                        cardNumberFound: false,
-                        pinFound: false,
-                        debug: {
-                            url: window.location.href,
-                            allInputs: [],
-                            foundInputs: [],
-                            formExists: document.querySelector('form') !== null,
-                            iframeFound: false,
-                            iframeUrl: null,
-                            iframeAccessible: false
+                };
+                
+                // Fill form directly on page (when on balancechecks.tx-gate.com directly)
+                // Try multiple selectors to find the card number field (same as ALDI)
+                var cardNumberInput = document.querySelector('input[name="cardnumberfield"]') ||
+                                    document.querySelector('input[name*="card" i]') ||
+                                    document.querySelector('input[name*="gutschein" i]') ||
+                                    document.querySelector('input[name*="karten" i]') ||
+                                    document.querySelector('input[placeholder*="0000"]') ||
+                                    null;
+                
+                // If not found by name/placeholder, try finding by table structure (same as ALDI)
+                if (!cardNumberInput) {
+                    var rows = document.querySelectorAll('tr');
+                    for (var r = 0; r < rows.length; r++) {
+                        var rowText = (rows[r].textContent || '').toLowerCase();
+                        if (rowText.indexOf('gutschein') !== -1 || 
+                            rowText.indexOf('guthaben') !== -1 ||
+                            rowText.indexOf('kartennummer') !== -1 ||
+                            rowText.indexOf('geschenkkarte') !== -1) {
+                            var inputs = rows[r].querySelectorAll('input[type="text"]');
+                            if (inputs.length > 0) {
+                                cardNumberInput = inputs[0];
+                                break;
+                            }
                         }
-                    };
+                    }
+                }
+                
+                // Try multiple selectors to find the PIN field (same as ALDI)
+                var pinInput = document.querySelector('input[name="pin"]') ||
+                              document.getElementById('myPw') ||
+                              document.querySelector('input[name*="pin" i]') ||
+                              document.querySelector('input[id*="pin" i]') ||
+                              document.querySelector('input[id*="pw" i]') ||
+                              document.querySelector('input[type="password"]') ||
+                              null;
+                
+                // If not found, try finding by table structure
+                if (!pinInput) {
+                    var rows = document.querySelectorAll('tr');
+                    for (var r = 0; r < rows.length; r++) {
+                        var rowText = (rows[r].textContent || '').toLowerCase();
+                        if (rowText.indexOf('pin') !== -1 && rowText.indexOf('anzeigen') === -1) {
+                            var inputs = rows[r].querySelectorAll('input');
+                            for (var i = 0; i < inputs.length; i++) {
+                                if (inputs[i].type === 'password' || inputs[i].type === 'text') {
+                                    pinInput = inputs[i];
+                                    break;
+                                }
+                            }
+                            if (pinInput) break;
+                        }
+                    }
+                }
+                
+                var captchaInput = document.querySelector('input[name="input"]');
+                
+                // Fill card number field
+                if (cardNumberInput) {
+                    cardNumberInput.focus();
+                    cardNumberInput.value = '${card.cardNumber}';
+                    try {
+                        cardNumberInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        cardNumberInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                        cardNumberInput.dispatchEvent(new Event('keyup', { bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    cardNumberInput.setAttribute('value', '${card.cardNumber}');
+                    result.cardNumberFound = true;
+                }
+                
+                // Fill PIN field
+                if (pinInput) {
+                    pinInput.focus();
+                    pinInput.value = '${card.pin}';
+                    try {
+                        pinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        pinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                        pinInput.dispatchEvent(new Event('keyup', { bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    pinInput.setAttribute('value', '${card.pin}');
+                    result.pinFound = true;
+                }
+                
+                result.captchaFound = captchaInput !== null;
+                result.success = result.cardNumberFound && result.pinFound;
+                
+                // Focus on CAPTCHA field to open keyboard after auto-fill (same as ALDI)
+                if (result.success && captchaInput) {
+                    var focusAttempts = 0;
+                    var maxFocusAttempts = 5;
                     
-                    // First, check for iframes (Lidl might use iframes like ALDI)
-                    var iframe = document.querySelector('iframe') || 
-                                 document.querySelector('iframe[src*="lidl"]') ||
-                                 document.querySelector('iframe[name*="form"]');
-                    
-                    if (iframe) {
-                        result.debug.iframeFound = true;
-                        result.debug.iframeUrl = iframe.src || iframe.getAttribute('src');
-                        
+                    function tryFocusCaptcha() {
+                        focusAttempts++;
                         try {
-                            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                            if (iframeDoc) {
-                                result.debug.iframeAccessible = true;
+                            var isReady = captchaInput.offsetParent !== null &&
+                                         !captchaInput.disabled &&
+                                         captchaInput.style.display !== 'none' &&
+                                         captchaInput.style.visibility !== 'hidden';
+                            
+                            if (isReady) {
+                                captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                captchaInput.focus();
+                                captchaInput.click();
                                 
-                                // Get all inputs from iframe for debugging
-                                var iframeInputs = iframeDoc.querySelectorAll('input');
-                                for (var i = 0; i < iframeInputs.length; i++) {
-                                    result.debug.allInputs.push({
-                                        name: iframeInputs[i].name || 'no-name',
-                                        id: iframeInputs[i].id || 'no-id',
-                                        type: iframeInputs[i].type || 'no-type',
-                                        className: iframeInputs[i].className || 'no-class',
-                                        placeholder: iframeInputs[i].placeholder || 'no-placeholder'
-                                    });
-                                }
+                                var focusEvent = new Event('focus', { bubbles: true, cancelable: true });
+                                captchaInput.dispatchEvent(focusEvent);
                                 
-                                // Try to find fields in iframe
-                                var cardNumberInput = iframeDoc.querySelector('input[name*="karten" i]') ||
-                                                     iframeDoc.querySelector('input[name*="geschenk" i]') ||
-                                                     iframeDoc.querySelector('input[name*="card" i]') ||
-                                                     iframeDoc.querySelector('input[placeholder*="Kartennummer" i]') ||
-                                                     iframeDoc.querySelector('input[placeholder*="20" i]') ||
-                                                     iframeDoc.querySelector('input[type="text"]') ||
-                                                     iframeDoc.querySelector('input[type="number"]');
-                                
-                                var pinInput = iframeDoc.querySelector('input[name*="pin" i]') ||
-                                              iframeDoc.querySelector('input[placeholder*="PIN" i]') ||
-                                              iframeDoc.querySelector('input[type="password"]');
-                                
-                                // If not found, try by position
-                                if (!cardNumberInput || !pinInput) {
-                                    var allIframeInputs = iframeDoc.querySelectorAll('input[type="text"], input[type="number"], input[type="password"]');
-                                    if (allIframeInputs.length >= 2) {
-                                        if (!cardNumberInput) cardNumberInput = allIframeInputs[0];
-                                        if (!pinInput) pinInput = allIframeInputs[1];
+                                try {
+                                    if (typeof TouchEvent !== 'undefined') {
+                                        var touchStart = new TouchEvent('touchstart', { bubbles: true, cancelable: true });
+                                        var touchEnd = new TouchEvent('touchend', { bubbles: true, cancelable: true });
+                                        captchaInput.dispatchEvent(touchStart);
+                                        captchaInput.dispatchEvent(touchEnd);
+                                    } else {
+                                        var mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+                                        var mouseUp = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+                                        captchaInput.dispatchEvent(mouseDown);
+                                        captchaInput.dispatchEvent(mouseUp);
                                     }
-                                }
+                                } catch(e) {}
                                 
-                                // Fill fields in iframe
-                                if (cardNumberInput) {
-                                    cardNumberInput.value = '${card.cardNumber}';
-                                    cardNumberInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                    cardNumberInput.dispatchEvent(new Event('change', { bubbles: true }));
-                                    result.cardNumberFound = true;
-                                    result.debug.foundInputs.push('cardNumber in iframe');
-                                }
+                                try {
+                                    var rect = captchaInput.getBoundingClientRect();
+                                    var x = Math.round(rect.left + rect.width / 2 + (window.scrollX || window.pageXOffset || 0));
+                                    var y = Math.round(rect.top + rect.height / 2 + (window.scrollY || window.pageYOffset || 0));
+                                    
+                                    if (typeof Android !== 'undefined' && Android.simulateTouch) {
+                                        Android.simulateTouch(x, y);
+                                    }
+                                } catch(e) {}
                                 
-                                if (pinInput) {
-                                    pinInput.value = '${card.pin}';
-                                    pinInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                    pinInput.dispatchEvent(new Event('change', { bubbles: true }));
-                                    result.pinFound = true;
-                                    result.debug.foundInputs.push('pin in iframe');
-                                }
-                                
-                                result.success = result.cardNumberFound && result.pinFound;
-                                return JSON.stringify(result);
+                                setTimeout(function() {
+                                    if (document.activeElement === captchaInput) {
+                                        if (typeof Android !== 'undefined' && Android.log) {
+                                            Android.log('CAPTCHA field focused successfully');
+                                        }
+                                    } else if (focusAttempts < maxFocusAttempts) {
+                                        setTimeout(tryFocusCaptcha, 200);
+                                    }
+                                }, 100);
+                            } else if (focusAttempts < maxFocusAttempts) {
+                                setTimeout(tryFocusCaptcha, 300);
                             }
-                        } catch (e) {
-                            result.debug.error = 'iframe_access_error: ' + e.toString();
+                        } catch(e) {
+                            if (focusAttempts < maxFocusAttempts) {
+                                setTimeout(tryFocusCaptcha, 300);
+                            }
                         }
                     }
                     
-                    // Get all inputs from main page for debugging
-                    var allInputs = document.querySelectorAll('input');
-                    for (var i = 0; i < allInputs.length; i++) {
-                        result.debug.allInputs.push({
-                            name: allInputs[i].name || 'no-name',
-                            id: allInputs[i].id || 'no-id',
-                            type: allInputs[i].type || 'no-type',
-                            className: allInputs[i].className || 'no-class',
-                            placeholder: allInputs[i].placeholder || 'no-placeholder'
+                    setTimeout(tryFocusCaptcha, 500);
+                }
+                
+                // Get only relevant form inputs for debugging (limit to prevent huge JSON)
+                var allInputs = document.querySelectorAll('input');
+                var relevantInputs = [];
+                for (var i = 0; i < allInputs.length; i++) {
+                    var input = allInputs[i];
+                    // Only collect text, password, number, submit inputs (limit to 20)
+                    if ((input.type === 'text' || input.type === 'password' || 
+                         input.type === 'number' || input.type === 'submit' ||
+                         input.type === 'button') && relevantInputs.length < 20) {
+                        relevantInputs.push({
+                            name: input.name || 'no-name',
+                            id: input.id || 'no-id',
+                            type: input.type || 'no-type',
+                            className: input.className || 'no-class'
                         });
                     }
-                    
-                    // Find the card number (Kartennummer/Geschenkkartennummer) field
-                    var cardNumberInput = document.querySelector('input[name="cardNumber"]') ||
-                                         document.querySelector('input[name*="karten" i]') ||
-                                         document.querySelector('input[name*="geschenk" i]') ||
-                                         document.querySelector('input[name*="card" i]') ||
-                                         document.querySelector('input[id*="karten" i]') ||
-                                         document.querySelector('input[id*="geschenk" i]') ||
-                                         document.querySelector('input[placeholder*="Kartennummer" i]') ||
-                                         document.querySelector('input[placeholder*="20" i]') ||
-                                         document.querySelector('input[placeholder*="Geschenkkarte" i]');
-                    
-                    if (!cardNumberInput) {
-                        // Try finding by label
-                        var labels = document.querySelectorAll('label');
-                        for (var i = 0; i < labels.length; i++) {
-                            var labelText = labels[i].textContent.toLowerCase();
-                            if (labelText.indexOf('kartennummer') !== -1 ||
-                                labelText.indexOf('geschenkkarte') !== -1 ||
-                                labelText.indexOf('card number') !== -1 ||
-                                labelText.indexOf('gutschein') !== -1) {
-                                var forAttr = labels[i].getAttribute('for');
-                                if (forAttr) {
-                                    cardNumberInput = document.getElementById(forAttr);
-                                }
-                                if (!cardNumberInput) {
-                                    cardNumberInput = labels[i].parentElement.querySelector('input');
-                                }
-                                if (!cardNumberInput) {
-                                    cardNumberInput = labels[i].closest('form')?.querySelector('input[type="text"], input[type="number"]');
-                                }
-                                break;
-                            }
-                        }
+                }
+                result.debug.allInputs = relevantInputs;
+                
+                if (result.cardNumberFound) {
+                    if (!result.debug.foundInputs) {
+                        result.debug.foundInputs = [];
                     }
-                    
-                    if (!cardNumberInput) {
-                        // Last resort: find all text inputs and use the first one
-                        var formInputs = document.querySelectorAll('form input[type="text"], form input[type="number"], input[type="text"], input[type="number"]');
-                        if (formInputs.length > 0) {
-                            cardNumberInput = formInputs[0];
-                        }
+                    result.debug.foundInputs.push('cardNumber: found');
+                }
+                if (result.pinFound) {
+                    if (!result.debug.foundInputs) {
+                        result.debug.foundInputs = [];
                     }
-
-                    // Find the PIN field
-                    var pinInput = document.querySelector('input[name="pin"]') ||
-                                  document.querySelector('input[name*="pin" i]') ||
-                                  document.querySelector('input[id*="pin" i]') ||
-                                  document.querySelector('input[placeholder*="PIN" i]') ||
-                                  document.querySelector('input[type="password"]');
-                    
-                    if (!pinInput) {
-                        var labels = document.querySelectorAll('label');
-                        for (var i = 0; i < labels.length; i++) {
-                            var labelText = labels[i].textContent.toLowerCase();
-                            if (labelText.trim() === 'pin' ||
-                                labelText.indexOf('pin') !== -1) {
-                                var forAttr = labels[i].getAttribute('for');
-                                if (forAttr) {
-                                    pinInput = document.getElementById(forAttr);
-                                }
-                                if (!pinInput) {
-                                    pinInput = labels[i].parentElement.querySelector('input');
-                                }
-                                if (!pinInput) {
-                                    pinInput = labels[i].closest('form')?.querySelector('input[type="password"], input[type="text"]');
-                                }
-                                break;
-                            }
-                        }
+                    result.debug.foundInputs.push('pin: found');
+                }
+                if (result.captchaFound) {
+                    if (!result.debug.foundInputs) {
+                        result.debug.foundInputs = [];
                     }
-                    
-                    if (!pinInput) {
-                        var formInputs = document.querySelectorAll('form input[type="text"], form input[type="password"], form input[type="number"], input[type="password"]');
-                        if (formInputs.length > 1) {
-                            pinInput = formInputs[1];
-                        } else if (formInputs.length === 1 && cardNumberInput && formInputs[0] !== cardNumberInput) {
-                            pinInput = formInputs[0];
-                        }
-                    }
-
-                    // Fill the fields
-                    if (cardNumberInput) {
-                        cardNumberInput.value = '${card.cardNumber}';
-                        cardNumberInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        cardNumberInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        cardNumberInput.dispatchEvent(new Event('blur', { bubbles: true }));
-                        result.cardNumberFound = true;
-                        result.debug.foundInputs.push('cardNumber: ' + (cardNumberInput.name || cardNumberInput.id || 'found'));
-                    }
-
-                    if (pinInput) {
-                        pinInput.value = '${card.pin}';
-                        pinInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        pinInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        pinInput.dispatchEvent(new Event('blur', { bubbles: true }));
-                        result.pinFound = true;
-                        result.debug.foundInputs.push('pin: ' + (pinInput.name || pinInput.id || 'found'));
-                    }
-
-                    result.success = result.cardNumberFound && result.pinFound;
+                    result.debug.foundInputs.push('captcha: found');
+                }
+                
+                try {
                     return JSON.stringify(result);
-                } catch (e) {
+                } catch (jsonErr) {
                     return JSON.stringify({
                         success: false,
-                        error: 'javascript_error',
-                        errorMessage: e.toString(),
-                        cardNumberFound: false,
-                        pinFound: false,
-                        debug: {
-                            url: window.location.href,
-                            allInputs: [],
-                            foundInputs: [],
-                            error: e.toString()
-                        }
+                        error: 'JSON serialization failed',
+                        cardNumberFound: result.cardNumberFound || false,
+                        pinFound: result.pinFound || false,
+                        captchaFound: result.captchaFound || false
                     });
                 }
             })();
@@ -273,26 +267,11 @@ class LidlMarket : Market() {
     override fun getFormSubmitScript(): String {
         return """
             (function() {
-                // Find the submit button
-                var submitButton = document.querySelector('button[type="submit"]');
-                if (!submitButton) {
-                    submitButton = document.querySelector('input[type="submit"]');
-                }
-                if (!submitButton) {
-                    var buttons = document.querySelectorAll('button');
-                    for (var i = 0; i < buttons.length; i++) {
-                        var buttonText = buttons[i].textContent.toLowerCase();
-                        if (buttonText.indexOf('guthaben') !== -1 ||
-                            buttonText.indexOf('abfragen') !== -1 ||
-                            buttonText.indexOf('prüfen') !== -1 ||
-                            buttonText.indexOf('check') !== -1 ||
-                            buttonText.indexOf('submit') !== -1) {
-                            submitButton = buttons[i];
-                            break;
-                        }
-                    }
-                }
-
+                // Find the submit button (same as ALDI)
+                var submitButton = document.querySelector('input[name="check"]') ||
+                                  document.querySelector('input[type="submit"]') ||
+                                  document.querySelector('button[type="submit"]');
+                
                 if (submitButton) {
                     submitButton.click();
                     return JSON.stringify({ success: true });
@@ -333,51 +312,50 @@ class LidlMarket : Market() {
 
                     var bodyText = document.body.innerText || '';
 
-                // Check for error messages (German)
-                if (bodyText.indexOf('ungültig') !== -1 ||
-                    bodyText.indexOf('nicht gefunden') !== -1 ||
-                    bodyText.indexOf('falsch') !== -1 ||
-                    bodyText.indexOf('Fehler') !== -1 ||
-                    bodyText.indexOf('inkorrekt') !== -1) {
-                    result.error = 'invalid_card';
-                    Android.onBalanceResult(JSON.stringify(result));
-                    return;
-                }
-
-                // Try to find balance patterns (German currency format)
-                // Pattern: "Guthaben: 25,00 €" or "25,00 EUR" or "€ 25,00"
-                var balancePatterns = [
-                    /Guthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€/i,
-                    /Restguthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€/i,
-                    /Aktuelles Guthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€/i,
-                    /([0-9]+[,\.][0-9]{2})\s*€/,
-                    /€\s*([0-9]+[,\.][0-9]{2})/,
-                    /([0-9]+[,\.][0-9]{2})\s*EUR/i,
-                    /EUR\s*([0-9]+[,\.][0-9]{2})/i
-                ];
-
-                for (var i = 0; i < balancePatterns.length; i++) {
-                    var match = bodyText.match(balancePatterns[i]);
-                    if (match && match[1]) {
-                        result.success = true;
-                        result.balance = match[1].replace(',', '.');
-                        break;
+                    // Check for error messages (German)
+                    if (bodyText.indexOf('ungültig') !== -1 ||
+                        bodyText.indexOf('nicht gefunden') !== -1 ||
+                        bodyText.indexOf('falsch') !== -1 ||
+                        bodyText.indexOf('Fehler') !== -1 ||
+                        bodyText.indexOf('inkorrekt') !== -1) {
+                        result.error = 'invalid_card';
+                        Android.onBalanceResult(JSON.stringify(result));
+                        return;
                     }
-                }
 
-                // Look for specific balance elements
-                var balanceElements = document.querySelectorAll('[class*="balance"], [class*="guthaben"], [class*="betrag"], [id*="balance"], [id*="guthaben"]');
-                if (!result.success && balanceElements.length > 0) {
-                    for (var j = 0; j < balanceElements.length; j++) {
-                        var text = balanceElements[j].innerText;
-                        var match = text.match(/([0-9]+[,\.][0-9]{2})/);
-                        if (match) {
+                    // Try to find balance patterns (German currency format)
+                    var balancePatterns = [
+                        /Guthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€/i,
+                        /Restguthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€/i,
+                        /Aktuelles Guthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€/i,
+                        /([0-9]+[,\.][0-9]{2})\s*€/,
+                        /€\s*([0-9]+[,\.][0-9]{2})/,
+                        /([0-9]+[,\.][0-9]{2})\s*EUR/i,
+                        /EUR\s*([0-9]+[,\.][0-9]{2})/i
+                    ];
+
+                    for (var i = 0; i < balancePatterns.length; i++) {
+                        var match = bodyText.match(balancePatterns[i]);
+                        if (match && match[1]) {
                             result.success = true;
                             result.balance = match[1].replace(',', '.');
                             break;
                         }
                     }
-                }
+
+                    // Look for specific balance elements
+                    var balanceElements = document.querySelectorAll('[class*="balance"], [class*="guthaben"], [class*="betrag"], [id*="balance"], [id*="guthaben"]');
+                    if (!result.success && balanceElements.length > 0) {
+                        for (var j = 0; j < balanceElements.length; j++) {
+                            var text = balanceElements[j].innerText;
+                            var match = text.match(/([0-9]+[,\.][0-9]{2})/);
+                            if (match) {
+                                result.success = true;
+                                result.balance = match[1].replace(',', '.');
+                                break;
+                            }
+                        }
+                    }
 
                     if (!result.success && !result.error) {
                         result.error = 'balance_not_found';
@@ -385,11 +363,16 @@ class LidlMarket : Market() {
 
                     Android.onBalanceResult(JSON.stringify(result));
                 } catch (e) {
+                    // Truncate long error messages to prevent UI issues
+                    var errorMsg = e.toString();
+                    if (errorMsg.length > 200) {
+                        errorMsg = errorMsg.substring(0, 200) + '...';
+                    }
                     var errorResult = {
                         success: false,
                         balance: null,
                         error: 'javascript_error',
-                        errorMessage: e.toString(),
+                        errorMessage: errorMsg,
                         html: document.body ? document.body.innerHTML : ''
                     };
                     Android.onBalanceResult(JSON.stringify(errorResult));
