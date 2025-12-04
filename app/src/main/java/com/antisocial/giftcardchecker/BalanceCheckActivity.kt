@@ -48,12 +48,16 @@ class BalanceCheckActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Get gift card from intent
-        giftCard = intent.getParcelableExtra(GiftCard.EXTRA_GIFT_CARD) 
-            ?: run {
-                Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show()
-                finish()
-                return
-            }
+        giftCard = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(GiftCard.EXTRA_GIFT_CARD, GiftCard::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(GiftCard.EXTRA_GIFT_CARD)
+        } ?: run {
+            Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
 
         // Get market implementation
         market = Market.forType(giftCard.marketType)
@@ -249,7 +253,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                                 Log.w(TAG, "WARNING: Page appears to be blank! HTML length: ${checkJson.optInt("htmlLength")}")
                                 
                                 // Try to get more info about what's blocking
-                                view?.evaluateJavascript("""
+                                view.evaluateJavascript("""
                                     (function() {
                                         var errors = [];
                                         var scripts = document.querySelectorAll('script');
@@ -381,7 +385,18 @@ class BalanceCheckActivity : AppCompatActivity() {
                             ConsoleMessage.MessageLevel.TIP -> "TIP"
                             else -> "UNKNOWN"
                         }
-                        Log.d(TAG, "WebView Console [$level]: [${it.sourceId()}:${it.lineNumber()}] ${it.message()}")
+                        val logLevel = when (it.messageLevel()) {
+                            ConsoleMessage.MessageLevel.ERROR -> Log.ERROR
+                            ConsoleMessage.MessageLevel.WARNING -> Log.WARN
+                            else -> Log.DEBUG
+                        }
+                        android.util.Log.println(logLevel, TAG, "WebView Console [$level]: [${it.sourceId()}:${it.lineNumber()}] ${it.message()}")
+                        
+                        // If it's an error and we're checking Lidl, log it prominently
+                        if (it.messageLevel() == ConsoleMessage.MessageLevel.ERROR && 
+                            giftCard.marketType == com.antisocial.giftcardchecker.model.MarketType.LIDL) {
+                            Log.e(TAG, "LIDL JavaScript Error: ${it.message()} at ${it.sourceId()}:${it.lineNumber()}")
+                        }
                     }
                     return true
                 }
@@ -503,6 +518,27 @@ class BalanceCheckActivity : AppCompatActivity() {
                 
                 val json = JSONObject(cleanedResult)
                 
+                // Check for JavaScript errors
+                if (json.has("error")) {
+                    val error = json.optString("error", "")
+                    val errorMessage = json.optString("errorMessage", "")
+                    Log.e(TAG, "JavaScript error in form fill: $error - $errorMessage")
+                    
+                    when (error) {
+                        "android_interface_not_available" -> {
+                            showError(BalanceResult.error("JavaScript interface not available. Please try again."))
+                        }
+                        "javascript_error" -> {
+                            showError(BalanceResult.error("JavaScript error: $errorMessage"))
+                        }
+                        else -> {
+                            showError(BalanceResult.error("Form fill error: $error"))
+                        }
+                    }
+                    isFillingForm = false
+                    return@evaluateJavascript
+                }
+                
                 // Check if tab was clicked but iframe not loaded yet
                 val tabClicked = json.optBoolean("tabClicked", false)
                 val iframeLoaded = json.optBoolean("iframeLoaded", false)
@@ -588,26 +624,58 @@ class BalanceCheckActivity : AppCompatActivity() {
                     // Form fields not found, retry with longer delay
                     pageLoadAttempts++
                     isFillingForm = false // Reset flag to allow retry
+                    
+                    val inputCount = json.optJSONObject("debug")?.optJSONArray("allInputs")?.length() ?: 0
+                    val iframeFound = json.optJSONObject("debug")?.optBoolean("iframeFound") ?: false
+                    
                     Log.w(TAG, "Form fields not found, attempt $pageLoadAttempts/$MAX_ATTEMPTS")
-
-                        // For ALDI, show WebView after 2 attempts (so page can become interactive)
-                        if (market.marketType == com.antisocial.giftcardchecker.model.MarketType.ALDI && pageLoadAttempts == 2) {
-                            Log.d(TAG, "Showing WebView after 2 attempts to allow page interaction")
-                            showLoading(false)
-                            binding.webView.visibility = View.VISIBLE
-                            // Continue retrying auto-fill in background
-                        }
-
-                        if (pageLoadAttempts < MAX_ATTEMPTS) {
-                            handler.postDelayed({
-                                fillFormFields()
-                            }, 2000) // Increased delay to 2 seconds
+                    Log.w(TAG, "Found $inputCount input fields, iframe found: $iframeFound")
+                    
+                    // Log all found inputs for debugging
+                    if (json.has("debug")) {
+                        val debug = json.getJSONObject("debug")
+                        val allInputs = debug.optJSONArray("allInputs")
+                        if (allInputs != null && allInputs.length() > 0) {
+                            Log.d(TAG, "Available inputs on page:")
+                            for (i in 0 until allInputs.length()) {
+                                val input = allInputs.getJSONObject(i)
+                                Log.d(TAG, "  Input $i: name='${input.optString("name")}', id='${input.optString("id")}', type='${input.optString("type")}', placeholder='${input.optString("placeholder")}'")
+                            }
                         } else {
-                            // Auto-fill failed - show error
-                            val errorMsg = "Form fields not found. Found ${json.optJSONObject("debug")?.optJSONArray("allInputs")?.length() ?: 0} input fields."
-                            Log.w(TAG, errorMsg)
-                            showError(BalanceResult.websiteChanged(errorMsg))
+                            Log.w(TAG, "No inputs found on page - page may not be loaded yet or structure changed")
                         }
+                    }
+
+                    // For ALDI, show WebView after 2 attempts (so page can become interactive)
+                    if (market.marketType == com.antisocial.giftcardchecker.model.MarketType.ALDI && pageLoadAttempts == 2) {
+                        Log.d(TAG, "Showing WebView after 2 attempts to allow page interaction")
+                        showLoading(false)
+                        binding.webView.visibility = View.VISIBLE
+                        // Continue retrying auto-fill in background
+                    }
+                    
+                    // For Lidl, wait longer as content might load dynamically
+                    val retryDelay = if (market.marketType == com.antisocial.giftcardchecker.model.MarketType.LIDL) {
+                        3000L // Wait 3 seconds for Lidl
+                    } else {
+                        2000L // 2 seconds for others
+                    }
+
+                    if (pageLoadAttempts < MAX_ATTEMPTS) {
+                        Log.d(TAG, "Retrying form fill in ${retryDelay}ms...")
+                        handler.postDelayed({
+                            fillFormFields()
+                        }, retryDelay)
+                    } else {
+                        // Auto-fill failed - show error with more details
+                        val errorMsg = if (inputCount == 0) {
+                            "Form fields not found. Page may not be loaded yet or website structure changed."
+                        } else {
+                            "Form fields not found. Found $inputCount input fields but couldn't identify card number/PIN fields."
+                        }
+                        Log.w(TAG, errorMsg)
+                        showError(BalanceResult.websiteChanged(errorMsg))
+                    }
                 }
             } catch (e: Exception) {
                 isFillingForm = false // Reset flag on error
@@ -1295,20 +1363,55 @@ class BalanceCheckActivity : AppCompatActivity() {
                 try {
                     val json = JSONObject(jsonString)
                     val success = json.optBoolean("success", false)
-                    val balance = json.optString("balance", null)
-                    val error = json.optString("error", null)
+                    val balance = json.optString("balance", "").takeIf { it.isNotEmpty() }
+                    val error = json.optString("error", "").takeIf { it.isNotEmpty() }
+                    val html = json.optString("html", "").takeIf { it.isNotEmpty() }
+
+                    Log.d(TAG, "Parsed balance result - success: $success, balance: $balance, error: $error")
+                    
+                    // Log HTML if available for debugging (truncated)
+                    html?.let {
+                        if (it.isNotEmpty()) {
+                            Log.d(TAG, "HTML length: ${it.length}, first 500 chars: ${it.take(500)}")
+                        }
+                    }
 
                     val result = when {
-                        success && balance != null -> BalanceResult.success(balance)
-                        error == "invalid_card" -> BalanceResult.invalidCard()
-                        error == "captcha_error" -> BalanceResult.error("CAPTCHA solution incorrect")
-                        else -> BalanceResult.parsingError("Could not extract balance")
+                        success && balance != null -> {
+                            Log.d(TAG, "Successfully extracted balance: $balance")
+                            BalanceResult.success(balance)
+                        }
+                        error == "invalid_card" -> {
+                            Log.d(TAG, "Invalid card error detected")
+                            BalanceResult.invalidCard()
+                        }
+                        error == "captcha_error" -> {
+                            Log.d(TAG, "CAPTCHA error detected")
+                            BalanceResult.error("CAPTCHA solution incorrect")
+                        }
+                        error == "balance_not_found" -> {
+                            Log.e(TAG, "Balance not found in page")
+                            // Try parsing HTML directly as fallback
+                            html?.let {
+                                val fallbackResult = market.parseBalanceResponse(it)
+                                if (fallbackResult.isSuccess()) {
+                                    Log.d(TAG, "Fallback parsing succeeded")
+                                    fallbackResult
+                                } else {
+                                    BalanceResult.parsingError("Could not extract balance from page")
+                                }
+                            } ?: BalanceResult.parsingError("Could not extract balance from page")
+                        }
+                        else -> {
+                            Log.e(TAG, "Unknown error or no balance found - error: $error")
+                            BalanceResult.parsingError("Could not extract balance: ${error ?: "unknown error"}")
+                        }
                     }
 
                     showResult(result)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing balance result", e)
-                    showError(BalanceResult.error(e.message))
+                    Log.e(TAG, "Error parsing balance result JSON: $jsonString", e)
+                    showError(BalanceResult.error("Error parsing result: ${e.message}"))
                 }
             }
         }
@@ -1631,6 +1734,7 @@ class BalanceCheckActivity : AppCompatActivity() {
         if (binding.webView.canGoBack()) {
             binding.webView.goBack()
         } else {
+            @Suppress("DEPRECATION")
             super.onBackPressed()
         }
     }

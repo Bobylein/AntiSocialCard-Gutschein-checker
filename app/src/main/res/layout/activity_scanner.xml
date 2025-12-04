@@ -236,5 +236,35 @@
         app:layout_constraintStart_toStartOf="@id/previewView"
         app:layout_constraintTop_toTopOf="@id/previewView" />
 
+    <!-- Debug: PIN search region overlay - shows where we're looking for PIN -->
+    <View
+        android:id="@+id/pinSearchRegionHighlight"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/highlight_debug"
+        android:visibility="gone"
+        android:elevation="9dp"
+        app:layout_constraintStart_toStartOf="@id/previewView"
+        app:layout_constraintTop_toTopOf="@id/previewView" />
+
+    <!-- Debug: Text view to show OCR results -->
+    <TextView
+        android:id="@+id/tvDebugOcr"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/spacing_md"
+        android:layout_marginEnd="@dimen/spacing_md"
+        android:layout_marginBottom="@dimen/spacing_sm"
+        android:background="#80000000"
+        android:fontFamily="monospace"
+        android:padding="@dimen/spacing_sm"
+        android:text=""
+        android:textColor="#FFFFFF"
+        android:textSize="10sp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/cardDetected"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
 

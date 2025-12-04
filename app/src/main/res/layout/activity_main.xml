@@ -197,6 +197,68 @@
 
             </androidx.cardview.widget.CardView>
 
+            <!-- Lidl Card -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardLidl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_md"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                app:cardBackgroundColor="@color/surface"
+                app:cardCornerRadius="@dimen/card_corner_radius"
+                app:cardElevation="@dimen/card_elevation">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="@dimen/spacing_md">
+
+                    <!-- Lidl icon/color indicator -->
+                    <View
+                        android:layout_width="8dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginEnd="@dimen/spacing_md"
+                        android:background="@color/lidl_blue" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/market_lidl"
+                            android:textColor="@color/on_surface"
+                            android:textSize="@dimen/text_headline"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/spacing_xs"
+                            android:text="Lidl Geschenkkarte"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="@dimen/text_caption" />
+
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center_vertical"
+                        android:src="@android:drawable/ic_media_play"
+                        android:tint="@color/secondary"
+                        tools:ignore="ContentDescription" />
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
+
             <!-- Instructions section -->
             <TextView
                 android:layout_width="wrap_content"
@@ -329,5 +391,6 @@
     </ScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
+
 
 
