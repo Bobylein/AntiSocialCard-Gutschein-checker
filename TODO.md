@@ -54,4 +54,5 @@
 - [x] Form submission detection and balance extraction
 - [x] ALDI page preloading in MainActivity to reduce blank page issues
 - [x] CAPTCHA field focus with retry mechanism and keyboard opening
+- [x] Native Android touch simulation for reliable CAPTCHA field focus and keyboard opening
 

@@ -312,6 +312,17 @@ class AldiMarket : Market() {
                                         }
                                     } catch(e) {}
                                     
+                                    // Get coordinates and call Android to simulate touch
+                                    try {
+                                        var rect = captchaInputDirect.getBoundingClientRect();
+                                        var x = Math.round(rect.left + rect.width / 2 + (window.scrollX || window.pageXOffset || 0));
+                                        var y = Math.round(rect.top + rect.height / 2 + (window.scrollY || window.pageYOffset || 0));
+                                        
+                                        if (typeof Android !== 'undefined' && Android.simulateTouch) {
+                                            Android.simulateTouch(x, y);
+                                        }
+                                    } catch(e) {}
+                                    
                                     // Verify focus worked
                                     setTimeout(function() {
                                         if (document.activeElement === captchaInputDirect) {
@@ -537,6 +548,18 @@ class AldiMarket : Market() {
                                                 captchaInput.dispatchEvent(touchEnd);
                                             } catch(e) {}
                                             
+                                            // Get coordinates and call Android to simulate touch
+                                            try {
+                                                var iframeRect = iframe.getBoundingClientRect();
+                                                var captchaRect = captchaInput.getBoundingClientRect();
+                                                var x = Math.round(iframeRect.left + captchaRect.left + captchaRect.width / 2 + (window.scrollX || window.pageXOffset || 0));
+                                                var y = Math.round(iframeRect.top + captchaRect.top + captchaRect.height / 2 + (window.scrollY || window.pageYOffset || 0));
+                                                
+                                                if (typeof Android !== 'undefined' && Android.simulateTouch) {
+                                                    Android.simulateTouch(x, y);
+                                                }
+                                            } catch(e) {}
+                                            
                                             // Verify focus worked
                                             setTimeout(function() {
                                                 if (iframeDoc.activeElement === captchaInput) {
@@ -680,10 +703,29 @@ class AldiMarket : Market() {
                                 
                                 // Also try touchstart/touchend for mobile
                                 try {
-                                    var touchStart = new TouchEvent('touchstart', { bubbles: true, cancelable: true });
-                                    var touchEnd = new TouchEvent('touchend', { bubbles: true, cancelable: true });
-                                    captchaInput.dispatchEvent(touchStart);
-                                    captchaInput.dispatchEvent(touchEnd);
+                                    if (typeof TouchEvent !== 'undefined') {
+                                        var touchStart = new TouchEvent('touchstart', { bubbles: true, cancelable: true });
+                                        var touchEnd = new TouchEvent('touchend', { bubbles: true, cancelable: true });
+                                        captchaInput.dispatchEvent(touchStart);
+                                        captchaInput.dispatchEvent(touchEnd);
+                                    } else {
+                                        // Fallback to mouse events for mobile WebView
+                                        var mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+                                        var mouseUp = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+                                        captchaInput.dispatchEvent(mouseDown);
+                                        captchaInput.dispatchEvent(mouseUp);
+                                    }
+                                } catch(e) {}
+                                
+                                // Get coordinates and call Android to simulate touch
+                                try {
+                                    var rect = captchaInput.getBoundingClientRect();
+                                    var x = Math.round(rect.left + rect.width / 2 + (window.scrollX || window.pageXOffset || 0));
+                                    var y = Math.round(rect.top + rect.height / 2 + (window.scrollY || window.pageYOffset || 0));
+                                    
+                                    if (typeof Android !== 'undefined' && Android.simulateTouch) {
+                                        Android.simulateTouch(x, y);
+                                    }
                                 } catch(e) {}
                                 
                                 // Verify focus worked

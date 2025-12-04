@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.MotionEvent
 import android.view.View
 import android.webkit.*
 import android.widget.Toast
@@ -1279,6 +1280,14 @@ class BalanceCheckActivity : AppCompatActivity() {
      */
     inner class WebAppInterface {
         @JavascriptInterface
+        fun simulateTouch(x: Int, y: Int) {
+            Log.d(TAG, "simulateTouch called from JavaScript: ($x, $y)")
+            handler.post {
+                simulateTouchAt(x, y)
+            }
+        }
+        
+        @JavascriptInterface
         fun onBalanceResult(jsonString: String) {
             Log.d(TAG, "Balance result received: $jsonString")
             
@@ -1396,29 +1405,37 @@ class BalanceCheckActivity : AppCompatActivity() {
     }
 
     /**
-     * Attempts to focus the CAPTCHA input field using JavaScript.
-     * This is called after form auto-fill as a backup to ensure the keyboard opens.
+     * Attempts to focus the CAPTCHA input field using a combination of JavaScript and native Android methods.
+     * This ensures the keyboard opens on mobile devices.
      */
     private fun focusCaptchaField() {
+        // First, ensure WebView has focus
+        binding.webView.requestFocus()
+        
+        // Get CAPTCHA field coordinates and simulate touch
         val script = """
             (function() {
-                function focusCaptcha() {
+                function getCaptchaCoordinates() {
                     // Try to find CAPTCHA input in main document
                     var captchaInput = document.querySelector('input[name="input"]');
                     
                     if (captchaInput) {
                         try {
+                            // Scroll into view first
                             captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            captchaInput.focus();
-                            captchaInput.click();
                             
-                            // Dispatch focus event
-                            var focusEvent = new Event('focus', { bubbles: true, cancelable: true });
-                            captchaInput.dispatchEvent(focusEvent);
+                            // Get bounding rectangle
+                            var rect = captchaInput.getBoundingClientRect();
+                            var x = rect.left + rect.width / 2;
+                            var y = rect.top + rect.height / 2;
                             
-                            return true;
+                            // Add scroll offsets
+                            x += window.scrollX || window.pageXOffset || 0;
+                            y += window.scrollY || window.pageYOffset || 0;
+                            
+                            return { found: true, x: Math.round(x), y: Math.round(y), inIframe: false };
                         } catch(e) {
-                            return false;
+                            return { found: false, error: e.toString() };
                         }
                     }
                     
@@ -1427,18 +1444,29 @@ class BalanceCheckActivity : AppCompatActivity() {
                         var iframes = document.querySelectorAll('iframe');
                         for (var i = 0; i < iframes.length; i++) {
                             try {
-                                var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+                                var iframe = iframes[i];
+                                var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                                 if (iframeDoc) {
                                     var iframeCaptcha = iframeDoc.querySelector('input[name="input"]');
                                     if (iframeCaptcha) {
+                                        // Scroll into view
                                         iframeCaptcha.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        iframeCaptcha.focus();
-                                        iframeCaptcha.click();
                                         
-                                        var focusEvent = new Event('focus', { bubbles: true, cancelable: true });
-                                        iframeCaptcha.dispatchEvent(focusEvent);
+                                        // Get iframe position
+                                        var iframeRect = iframe.getBoundingClientRect();
                                         
-                                        return true;
+                                        // Get captcha position relative to iframe
+                                        var captchaRect = iframeCaptcha.getBoundingClientRect();
+                                        
+                                        // Calculate absolute position
+                                        var x = iframeRect.left + captchaRect.left + captchaRect.width / 2;
+                                        var y = iframeRect.top + captchaRect.top + captchaRect.height / 2;
+                                        
+                                        // Add scroll offsets
+                                        x += window.scrollX || window.pageXOffset || 0;
+                                        y += window.scrollY || window.pageYOffset || 0;
+                                        
+                                        return { found: true, x: Math.round(x), y: Math.round(y), inIframe: true };
                                     }
                                 }
                             } catch(e) {
@@ -1447,31 +1475,156 @@ class BalanceCheckActivity : AppCompatActivity() {
                         }
                     } catch(e) {}
                     
-                    return false;
+                    return { found: false };
                 }
                 
-                // Try multiple times with delays
-                var attempts = 0;
-                var maxAttempts = 3;
-                
-                function tryFocus() {
-                    attempts++;
-                    if (focusCaptcha()) {
-                        if (typeof Android !== 'undefined' && Android.log) {
-                            Android.log('CAPTCHA focused from Android side');
-                        }
-                    } else if (attempts < maxAttempts) {
-                        setTimeout(tryFocus, 500);
+                var coords = getCaptchaCoordinates();
+                if (coords.found) {
+                    // Call Android to simulate touch at coordinates
+                    if (typeof Android !== 'undefined' && Android.simulateTouch) {
+                        Android.simulateTouch(coords.x, coords.y);
                     }
+                    
+                    // Also try JavaScript focus as backup
+                    setTimeout(function() {
+                        var captchaInput = document.querySelector('input[name="input"]');
+                        if (captchaInput) {
+                            captchaInput.focus();
+                            captchaInput.click();
+                        }
+                    }, 100);
+                    
+                    return JSON.stringify({ success: true, x: coords.x, y: coords.y });
+                } else {
+                    // Retry after delay
+                    setTimeout(function() {
+                        var coords2 = getCaptchaCoordinates();
+                        if (coords2.found && typeof Android !== 'undefined' && Android.simulateTouch) {
+                            Android.simulateTouch(coords2.x, coords2.y);
+                        }
+                    }, 500);
+                    
+                    return JSON.stringify({ success: false, retrying: true });
                 }
-                
-                tryFocus();
             })();
         """.trimIndent()
         
         binding.webView.evaluateJavascript(script) { result ->
-            Log.d(TAG, "CAPTCHA focus attempt result: $result")
+            Log.d(TAG, "CAPTCHA coordinates result: $result")
+            try {
+                val json = JSONObject(result.trim('"').replace("\\\"", "\""))
+                if (json.optBoolean("success", false)) {
+                    val x = json.optInt("x", -1)
+                    val y = json.optInt("y", -1)
+                    if (x >= 0 && y >= 0) {
+                        simulateTouchAt(x, y)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing CAPTCHA coordinates", e)
+            }
         }
+    }
+    
+    /**
+     * Simulates a touch event at the specified coordinates to trigger keyboard.
+     * Coordinates should be relative to the WebView content (from JavaScript getBoundingClientRect).
+     * This is a more reliable method than JavaScript focus() on Android WebView.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun simulateTouchAt(x: Int, y: Int) {
+        Log.d(TAG, "Simulating touch at WebView coordinates: ($x, $y)")
+        
+        // Ensure WebView has focus first
+        binding.webView.requestFocus()
+        
+        // Create touch events - coordinates are already relative to WebView content
+        val downTime = System.currentTimeMillis()
+        
+        try {
+            // Use MotionEvent.obtain() - works on API 1+
+            val downEvent = MotionEvent.obtain(
+                downTime,
+                downTime,
+                MotionEvent.ACTION_DOWN,
+                x.toFloat(),
+                y.toFloat(),
+                0
+            )
+            
+            val upEvent = MotionEvent.obtain(
+                downTime,
+                downTime + 100,
+                MotionEvent.ACTION_UP,
+                x.toFloat(),
+                y.toFloat(),
+                0
+            )
+            
+            // Dispatch events on UI thread
+            handler.post {
+                try {
+                    // First ensure WebView is focused and visible
+                    binding.webView.requestFocus()
+                    
+                    // Dispatch touch events
+                    binding.webView.dispatchTouchEvent(downEvent)
+                    handler.postDelayed({
+                        binding.webView.dispatchTouchEvent(upEvent)
+                        downEvent.recycle()
+                        upEvent.recycle()
+                        Log.d(TAG, "Touch events dispatched successfully")
+                    }, 100)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error dispatching touch events", e)
+                    downEvent.recycle()
+                    upEvent.recycle()
+                    // Fallback to JavaScript click
+                    fallbackJavaScriptClick()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating touch events", e)
+            // Fallback: use JavaScript click
+            fallbackJavaScriptClick()
+        }
+    }
+    
+    /**
+     * Fallback method: uses JavaScript to click the CAPTCHA field.
+     */
+    private fun fallbackJavaScriptClick() {
+        binding.webView.requestFocus()
+        handler.postDelayed({
+            binding.webView.evaluateJavascript("""
+                (function() {
+                    var captcha = document.querySelector('input[name="input"]');
+                    if (captcha) {
+                        captcha.focus();
+                        captcha.click();
+                        return true;
+                    }
+                    // Try iframe
+                    var iframes = document.querySelectorAll('iframe');
+                    for (var i = 0; i < iframes.length; i++) {
+                        try {
+                            var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+                            if (iframeDoc) {
+                                var iframeCaptcha = iframeDoc.querySelector('input[name="input"]');
+                                if (iframeCaptcha) {
+                                    iframeCaptcha.focus();
+                                    iframeCaptcha.click();
+                                    return true;
+                                }
+                            }
+                        } catch(e) {}
+                    }
+                    return false;
+                })();
+            """.trimIndent()) { result ->
+                Log.d(TAG, "Fallback JavaScript click result: $result")
+            }
+        }, 200)
     }
 
     override fun onBackPressed() {
