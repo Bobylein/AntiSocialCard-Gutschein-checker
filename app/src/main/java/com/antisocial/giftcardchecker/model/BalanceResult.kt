@@ -1,6 +1,8 @@
 package com.antisocial.giftcardchecker.model
 
+import android.content.Context
 import android.os.Parcelable
+import com.antisocial.giftcardchecker.R
 import kotlinx.parcelize.Parcelize
 
 /**
@@ -49,7 +51,7 @@ data class BalanceResult(
         fun invalidCard(message: String? = null): BalanceResult {
             return BalanceResult(
                 status = BalanceStatus.INVALID_CARD,
-                errorMessage = message ?: "Invalid card number"
+                errorMessage = message
             )
         }
         
@@ -59,7 +61,7 @@ data class BalanceResult(
         fun invalidPin(message: String? = null): BalanceResult {
             return BalanceResult(
                 status = BalanceStatus.INVALID_PIN,
-                errorMessage = message ?: "Invalid PIN"
+                errorMessage = message
             )
         }
         
@@ -69,7 +71,7 @@ data class BalanceResult(
         fun networkError(message: String? = null): BalanceResult {
             return BalanceResult(
                 status = BalanceStatus.NETWORK_ERROR,
-                errorMessage = message ?: "Network error. Please check your connection."
+                errorMessage = message
             )
         }
         
@@ -79,7 +81,7 @@ data class BalanceResult(
         fun parsingError(message: String? = null, rawResponse: String? = null): BalanceResult {
             return BalanceResult(
                 status = BalanceStatus.PARSING_ERROR,
-                errorMessage = message ?: "Failed to parse balance",
+                errorMessage = message,
                 rawResponse = rawResponse
             )
         }
@@ -90,7 +92,7 @@ data class BalanceResult(
         fun websiteChanged(message: String? = null): BalanceResult {
             return BalanceResult(
                 status = BalanceStatus.WEBSITE_CHANGED,
-                errorMessage = message ?: "Website structure may have changed"
+                errorMessage = message
             )
         }
         
@@ -100,7 +102,7 @@ data class BalanceResult(
         fun error(message: String? = null): BalanceResult {
             return BalanceResult(
                 status = BalanceStatus.UNKNOWN_ERROR,
-                errorMessage = message ?: "An unknown error occurred"
+                errorMessage = message
             )
         }
     }
@@ -131,8 +133,9 @@ data class BalanceResult(
     /**
      * Returns a user-friendly error message.
      * Truncates long error messages to prevent UI issues.
+     * @param context The context to access string resources
      */
-    fun getDisplayMessage(): String {
+    fun getDisplayMessage(context: Context): String {
         val truncateMessage = { msg: String? ->
             msg?.let {
                 if (it.length > 200) {
@@ -144,13 +147,13 @@ data class BalanceResult(
         }
         
         return when (status) {
-            BalanceStatus.SUCCESS -> "Balance: ${getFormattedBalance()}"
-            BalanceStatus.INVALID_CARD -> truncateMessage(errorMessage) ?: "Invalid card number"
-            BalanceStatus.INVALID_PIN -> truncateMessage(errorMessage) ?: "Invalid PIN"
-            BalanceStatus.NETWORK_ERROR -> truncateMessage(errorMessage) ?: "Network error"
-            BalanceStatus.PARSING_ERROR -> truncateMessage(errorMessage) ?: "Could not read balance"
-            BalanceStatus.WEBSITE_CHANGED -> truncateMessage(errorMessage) ?: "Service temporarily unavailable"
-            BalanceStatus.UNKNOWN_ERROR -> truncateMessage(errorMessage) ?: "An error occurred"
+            BalanceStatus.SUCCESS -> context.getString(R.string.balance_label, getFormattedBalance())
+            BalanceStatus.INVALID_CARD -> truncateMessage(errorMessage) ?: context.getString(R.string.invalid_card_number)
+            BalanceStatus.INVALID_PIN -> truncateMessage(errorMessage) ?: context.getString(R.string.invalid_pin)
+            BalanceStatus.NETWORK_ERROR -> truncateMessage(errorMessage) ?: context.getString(R.string.balance_network_error)
+            BalanceStatus.PARSING_ERROR -> truncateMessage(errorMessage) ?: context.getString(R.string.could_not_read_balance)
+            BalanceStatus.WEBSITE_CHANGED -> truncateMessage(errorMessage) ?: context.getString(R.string.service_unavailable)
+            BalanceStatus.UNKNOWN_ERROR -> truncateMessage(errorMessage) ?: context.getString(R.string.error_generic)
         }
     }
 }

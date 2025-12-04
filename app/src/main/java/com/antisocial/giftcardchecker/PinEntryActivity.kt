@@ -127,12 +127,12 @@ class PinEntryActivity : AppCompatActivity() {
         if (isEditingCardNumber) {
             binding.etCardNumber.setText(cardNumber)
             binding.tilCardNumber.visibility = View.VISIBLE
-            binding.btnEditCardNumber.text = "Save"
+            binding.btnEditCardNumber.text = getString(R.string.save)
         } else {
             cardNumber = binding.etCardNumber.text.toString().replace(" ", "")
             binding.tvCardNumber.text = formatCardNumber(cardNumber)
             binding.tilCardNumber.visibility = View.GONE
-            binding.btnEditCardNumber.text = "Edit"
+            binding.btnEditCardNumber.text = getString(R.string.edit)
         }
     }
 
@@ -276,7 +276,7 @@ class PinEntryActivity : AppCompatActivity() {
                         Log.d(TAG, "No PIN found in recognized text")
                         Toast.makeText(
                             this,
-                            "No PIN detected. Try again. (Found: ${recognizedText.take(50)}...)",
+                            getString(R.string.no_pin_detected, recognizedText.take(50)),
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -324,7 +324,7 @@ class PinEntryActivity : AppCompatActivity() {
 
         // Validate
         if (finalCardNumber.isEmpty()) {
-            binding.tilCardNumber.error = "Card number is required"
+            binding.tilCardNumber.error = getString(R.string.card_number_required)
             return
         }
 
