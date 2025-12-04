@@ -50,8 +50,8 @@ data class GiftCard(
      */
     fun isValidCardNumber(): Boolean {
         return when (marketType) {
-            MarketType.REWE -> cardNumber.length in 13..19 && cardNumber.all { it.isDigit() }
-            MarketType.ALDI -> cardNumber.length == 19 && cardNumber.all { it.isDigit() }
+            MarketType.REWE -> cardNumber.length == 13 && cardNumber.all { it.isDigit() }
+            MarketType.ALDI -> cardNumber.length == 20 && cardNumber.all { it.isDigit() }
             MarketType.LIDL -> cardNumber.length == 20 && cardNumber.all { it.isDigit() }
         }
     }
