@@ -98,6 +98,13 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.7**:
+  - **REWE Performance Optimization**:
+    - Image blocking for REWE pages to reduce loading time
+    - Only decorative images are blocked (logos, banners, etc.)
+    - Captcha images and form-related images are always allowed
+    - Increased wait times for REWE form detection (3 seconds)
+    - More conservative image blocking to prevent interfering with form rendering
 - **1.6**: 
   - **PIN Detection Region Improvements**:
     - REWE TYPE_2: Added 2x PIN area gap between barcode and PIN search region for Aztec barcodes

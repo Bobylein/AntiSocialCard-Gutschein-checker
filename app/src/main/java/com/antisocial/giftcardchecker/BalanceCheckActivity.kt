@@ -136,21 +136,74 @@ class BalanceCheckActivity : AppCompatActivity() {
                     view: WebView?,
                     request: android.webkit.WebResourceRequest?
                 ): android.webkit.WebResourceResponse? {
-                    // Add referrer header for ALDI iframe URL to prevent blank page
-                    if (request != null && request.url.toString().contains("balancechecks.tx-gate.com")) {
-                        val headers = request.requestHeaders.toMutableMap()
-                        // Add referrer header to make it look like we came from the parent page
-                        if (!headers.containsKey("Referer")) {
-                            headers["Referer"] = "https://www.helaba.com/de/aldi/"
+                    if (request != null) {
+                        val url = request.url.toString()
+                        
+                        // Block images for REWE except captcha images and form-related images
+                        if (market.marketType == com.antisocial.giftcardchecker.model.MarketType.REWE) {
+                            // Only block if it's clearly an image file (by extension)
+                            // Don't block based on Accept header or path alone to avoid false positives
+                            val isImageFile = url.matches(Regex(".*\\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\\?.*)?$", RegexOption.IGNORE_CASE))
+                            
+                            if (isImageFile) {
+                                // Allow captcha images - check for common captcha URL patterns
+                                val isCaptchaImage = url.contains("captcha", ignoreCase = true) ||
+                                                    url.contains("security", ignoreCase = true) ||
+                                                    url.contains("verify", ignoreCase = true) ||
+                                                    url.contains("challenge", ignoreCase = true) ||
+                                                    url.contains("recaptcha", ignoreCase = true) ||
+                                                    url.contains("hcaptcha", ignoreCase = true) ||
+                                                    url.contains("turnstile", ignoreCase = true) ||
+                                                    url.contains("code", ignoreCase = true) // Some captchas use "code" in URL
+                                
+                                // Allow form-related images (icons, sprites that might be needed for form rendering)
+                                val isFormRelated = url.contains("/form/", ignoreCase = true) ||
+                                                   url.contains("/input/", ignoreCase = true) ||
+                                                   url.contains("/field/", ignoreCase = true) ||
+                                                   url.contains("icon", ignoreCase = true) ||
+                                                   url.contains("sprite", ignoreCase = true)
+                                
+                                // Only block decorative images (logos, banners, etc.) in common image directories
+                                val isDecorativeImage = (url.contains("/images/", ignoreCase = true) ||
+                                                        url.contains("/img/", ignoreCase = true) ||
+                                                        url.contains("/assets/images/", ignoreCase = true) ||
+                                                        url.contains("/static/images/", ignoreCase = true) ||
+                                                        url.contains("/media/", ignoreCase = true) ||
+                                                        url.contains("/uploads/", ignoreCase = true)) &&
+                                                       !isCaptchaImage && !isFormRelated
+                                
+                                if (isDecorativeImage) {
+                                    // Block decorative images only
+                                    Log.d(TAG, "Blocking decorative image for REWE: $url")
+                                    return android.webkit.WebResourceResponse(
+                                        "image/png",
+                                        "utf-8",
+                                        java.io.ByteArrayInputStream(ByteArray(0))
+                                    )
+                                } else if (isCaptchaImage) {
+                                    Log.d(TAG, "Allowing captcha image for REWE: $url")
+                                } else if (isFormRelated) {
+                                    Log.d(TAG, "Allowing form-related image for REWE: $url")
+                                }
+                            }
                         }
-                        // Ensure we have proper headers
-                        headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
-                        headers["Accept-Language"] = "de-DE,de;q=0.9,en;q=0.8"
                         
-                        Log.d(TAG, "Intercepting request to ${request.url} with referrer: ${headers["Referer"]}")
-                        
-                        // Note: We can't modify headers in shouldInterceptRequest easily
-                        // So we'll handle this in loadUrl instead
+                        // Add referrer header for ALDI iframe URL to prevent blank page
+                        if (url.contains("balancechecks.tx-gate.com")) {
+                            val headers = request.requestHeaders.toMutableMap()
+                            // Add referrer header to make it look like we came from the parent page
+                            if (!headers.containsKey("Referer")) {
+                                headers["Referer"] = "https://www.helaba.com/de/aldi/"
+                            }
+                            // Ensure we have proper headers
+                            headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+                            headers["Accept-Language"] = "de-DE,de;q=0.9,en;q=0.8"
+                            
+                            Log.d(TAG, "Intercepting request to $url with referrer: ${headers["Referer"]}")
+                            
+                            // Note: We can't modify headers in shouldInterceptRequest easily
+                            // So we'll handle this in loadUrl instead
+                        }
                     }
                     return super.shouldInterceptRequest(view, request)
                 }
@@ -370,10 +423,12 @@ class BalanceCheckActivity : AppCompatActivity() {
                     if (!formFilled && !isFillingForm) {
                         // Wait for form to be fully loaded and rendered
                         // The ALDI form might need more time to initialize, especially if it uses JavaScript
+                        // REWE may need more time after image blocking optimizations
                         // If we're on the iframe URL, wait 2 seconds since form should be ready
                         val waitTime = when {
                             isIframeUrl -> 2000L // 2 seconds for direct iframe URL
                             market.marketType == com.antisocial.giftcardchecker.model.MarketType.ALDI -> 3000L // 3 seconds for ALDI main page (to allow tab click)
+                            market.marketType == com.antisocial.giftcardchecker.model.MarketType.REWE -> 3000L // 3 seconds for REWE (page may need time to render)
                             else -> 2000L // 2 seconds for others
                         }
                         
@@ -757,10 +812,11 @@ class BalanceCheckActivity : AppCompatActivity() {
                     }
                     
                     // For ALDI and Lidl, wait longer as content might load dynamically
+                    // For REWE, also wait longer as page might need more time to fully render after image blocking
                     val retryDelay = when (market.marketType) {
                         com.antisocial.giftcardchecker.model.MarketType.ALDI -> 3000L // 3 seconds for ALDI main page (to allow tab click)
                         com.antisocial.giftcardchecker.model.MarketType.LIDL -> 3000L // 3 seconds for Lidl (similar to ALDI)
-                        else -> 2000L // 2 seconds for others
+                        com.antisocial.giftcardchecker.model.MarketType.REWE -> 3000L // 3 seconds for REWE (page may need time to render)
                     }
 
                     if (pageLoadAttempts < MAX_ATTEMPTS) {
