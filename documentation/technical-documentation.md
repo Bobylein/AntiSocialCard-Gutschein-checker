@@ -114,15 +114,27 @@ Uses CameraX with ML Kit Text Recognition:
 1. Load retailer's balance check URL (with headers for ALDI)
 2. Wait for page load
 3. Inject JavaScript to fill form fields automatically
-4. User manually solves CAPTCHA and submits form (for ALDI)
-5. Monitor page changes to detect form submission
-6. Extract balance using JavaScript or HTML parsing
-7. Display result to user
+4. Focus CAPTCHA field to open keyboard (for ALDI)
+5. User manually solves CAPTCHA and submits form (for ALDI)
+6. Monitor page changes to detect form submission
+7. Extract balance using JavaScript or HTML parsing
+8. Display result to user
+
+**Page Preloading (MainActivity):**
+- When user clicks ALDI card, hidden WebView starts loading ALDI page in background
+- Page loads while user goes through scanner flow
+- When BalanceCheckActivity loads same URL, it benefits from cache/preload
+- Reduces blank page issues and improves perceived performance
 
 **ALDI-specific implementation:**
 - Loads iframe URL directly with referrer header to prevent blank page
 - Uses enhanced field selectors with table structure fallback
 - Detects form submission via iframe navigation monitoring
+- **Page preloading**: Hidden WebView in MainActivity preloads ALDI page when user clicks ALDI card
+- **CAPTCHA focus**: Multi-attempt focus mechanism with retry logic to ensure keyboard opens
+  - JavaScript-side: Up to 5 retry attempts with field readiness checks
+  - Android-side: Backup focus method called after form fill
+  - Handles both direct form and iframe scenarios
 
 ### JavaScript Injection
 
@@ -194,6 +206,17 @@ var balancePatterns = [
 5. Balance extraction accuracy
 6. Error state handling
 7. Network error recovery
+
+## Recent Improvements (v1.1)
+
+- **ALDI Page Preloading**: Hidden WebView preloads ALDI page when user selects ALDI market
+- **CAPTCHA Focus Enhancement**: 
+  - Multi-attempt focus with retry mechanism (up to 5 attempts)
+  - Field readiness checks (visibility, enabled state)
+  - Scroll into view before focusing
+  - Multiple event dispatching (focus, click, mouse events)
+  - Android-side backup focus method
+  - Improved keyboard opening reliability on mobile devices
 
 ## Future Improvements
 

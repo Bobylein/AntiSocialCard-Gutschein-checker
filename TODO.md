@@ -5,7 +5,6 @@
 ### High Priority
 
 - [ ] **Add third market support** - Extend the app to support additional retailers as needed
-- [ ] **Improve CAPTCHA handling** - Better user guidance when CAPTCHA is required
 - [ ] **Offline mode indicator** - Show clear message when no network available
 
 ### Medium Priority
@@ -53,4 +52,6 @@
 - [x] Referrer header fix for ALDI blank page issue
 - [x] Manual form submission (user submits after CAPTCHA entry)
 - [x] Form submission detection and balance extraction
+- [x] ALDI page preloading in MainActivity to reduce blank page issues
+- [x] CAPTCHA field focus with retry mechanism and keyboard opening
 
