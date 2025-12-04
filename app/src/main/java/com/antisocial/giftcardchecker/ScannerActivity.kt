@@ -418,9 +418,11 @@ class ScannerActivity : AppCompatActivity() {
         // Use actual image analysis dimensions (ML Kit coordinate system)
         val imageWidth = imageAnalysisWidth
         val imageHeight = imageAnalysisHeight
+        val rotation = imageRotationDegrees
 
         // Calculate how the image is displayed in the preview view
         // PreviewView may scale and crop the image to fit
+        // Note: PreviewView automatically handles rotation, so we need to account for it
         val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
         val previewAspectRatio = previewWidth.toFloat() / previewHeight.toFloat()
         
@@ -429,6 +431,9 @@ class ScannerActivity : AppCompatActivity() {
         val offsetX: Int
         val offsetY: Int
         
+        // For portrait rotations (90°/270°), ML Kit swaps width/height
+        // But PreviewView displays in the same orientation as ML Kit coordinates
+        // So we can use the ML Kit dimensions directly
         if (imageAspectRatio > previewAspectRatio) {
             // Image is wider - fit to width, letterbox top/bottom
             scaleX = previewWidth.toFloat() / imageWidth.toFloat()
@@ -443,42 +448,61 @@ class ScannerActivity : AppCompatActivity() {
             offsetY = 0
         }
 
-        // Update barcode search region highlight (RED) - where we expect the barcode
-        barcodeSearchRegion?.let { region ->
+        // Transform function for a single region
+        fun transformRegion(region: Rect): android.graphics.Rect {
             val left = (region.left * scaleX + offsetX).toInt()
             val top = (region.top * scaleY + offsetY).toInt()
             val right = (region.right * scaleX + offsetX).toInt()
             val bottom = (region.bottom * scaleY + offsetY).toInt()
+            return android.graphics.Rect(left, top, right, bottom)
+        }
+
+        // Update barcode search region highlight (RED) - where we expect the barcode
+        barcodeSearchRegion?.let { region ->
+            val transformed = transformRegion(region)
 
             val layoutParams = binding.barcodeHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            layoutParams.leftMargin = left.coerceAtLeast(0)
-            layoutParams.topMargin = top.coerceAtLeast(0)
-            layoutParams.width = (right - left).coerceAtLeast(1)
-            layoutParams.height = (bottom - top).coerceAtLeast(1)
+            layoutParams.leftMargin = transformed.left.coerceAtLeast(0)
+            layoutParams.topMargin = transformed.top.coerceAtLeast(0)
+            layoutParams.width = transformed.width().coerceAtLeast(1)
+            layoutParams.height = transformed.height().coerceAtLeast(1)
             binding.barcodeHighlight.layoutParams = layoutParams
             binding.barcodeHighlight.visibility = View.VISIBLE
 
-            Log.d(TAG, "Barcode search region (RED): left=$left, top=$top, width=${right - left}, height=${bottom - top}")
+            Log.d(TAG, "Barcode search region (RED): left=${transformed.left}, top=${transformed.top}, width=${transformed.width()}, height=${transformed.height()}, rotation=$rotation")
         } ?: run {
             binding.barcodeHighlight.visibility = View.GONE
         }
 
         // Update PIN search region highlight (BLUE) - where we expect the PIN
         pinSearchRegion?.let { region ->
-            val left = (region.left * scaleX + offsetX).toInt()
-            val top = (region.top * scaleY + offsetY).toInt()
-            val right = (region.right * scaleX + offsetX).toInt()
-            val bottom = (region.bottom * scaleY + offsetY).toInt()
+            val transformed = transformRegion(region)
 
             val layoutParams = binding.pinHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            layoutParams.leftMargin = left.coerceAtLeast(0)
-            layoutParams.topMargin = top.coerceAtLeast(0)
-            layoutParams.width = (right - left).coerceAtLeast(1)
-            layoutParams.height = (bottom - top).coerceAtLeast(1)
+            layoutParams.leftMargin = transformed.left.coerceAtLeast(0)
+            layoutParams.topMargin = transformed.top.coerceAtLeast(0)
+            layoutParams.width = transformed.width().coerceAtLeast(1)
+            layoutParams.height = transformed.height().coerceAtLeast(1)
             binding.pinHighlight.layoutParams = layoutParams
             binding.pinHighlight.visibility = View.VISIBLE
 
-            Log.d(TAG, "PIN search region (BLUE): left=$left, top=$top, width=${right - left}, height=${bottom - top}")
+            // Also log barcode position for comparison
+            barcodeSearchRegion?.let { barcodeRegion ->
+                val barcodeTransformed = transformRegion(barcodeRegion)
+                Log.d(TAG, "=== PIN OVERLAY DEBUG ===")
+                Log.d(TAG, "Barcode overlay: top=${barcodeTransformed.top}, bottom=${barcodeTransformed.bottom}")
+                Log.d(TAG, "PIN overlay: top=${transformed.top}, bottom=${transformed.bottom}")
+                Log.d(TAG, "PIN should be ABOVE barcode: PIN.bottom (${transformed.bottom}) < Barcode.top (${barcodeTransformed.top})")
+                Log.d(TAG, "Actual: PIN.bottom=${transformed.bottom}, Barcode.top=${barcodeTransformed.top}")
+                Log.d(TAG, "PIN region ML Kit: top=${region.top}, bottom=${region.bottom}")
+                Log.d(TAG, "Barcode region ML Kit: top=${barcodeRegion.top}, bottom=${barcodeRegion.bottom}")
+                Log.d(TAG, "ML Kit: PIN.bottom (${region.bottom}) < Barcode.top (${barcodeRegion.top}) = ${region.bottom < barcodeRegion.top}")
+                Log.d(TAG, "Image dimensions: ${imageWidth}x${imageHeight}, Preview: ${previewWidth}x${previewHeight}, Rotation: $rotation")
+                Log.d(TAG, "Scale: X=$scaleX, Y=$scaleY, Offset: X=$offsetX, Y=$offsetY")
+                Log.d(TAG, "========================")
+            }
+
+            Log.d(TAG, "PIN search region (BLUE): left=${transformed.left}, top=${transformed.top}, width=${transformed.width()}, height=${transformed.height()}, rotation=$rotation")
         } ?: run {
             binding.pinHighlight.visibility = View.GONE
         }
