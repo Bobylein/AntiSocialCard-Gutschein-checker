@@ -99,6 +99,10 @@ This project is for educational purposes. Use responsibly and respect the terms 
 ## Version History
 
 - **1.6**: 
+  - **PIN Detection Region Improvements**:
+    - REWE TYPE_2: Added 2x PIN area gap between barcode and PIN search region for Aztec barcodes
+    - ALDI: Corner-focused PIN detection with no barcode overlap, similar to Lidl
+    - Improved PIN detection accuracy by better positioning search regions
   - **Fixed REWE PIN detection**: Rotation-aware PIN region calculation
   - Works correctly when phone is portrait but card is held landscape
   - PIN search region now relative to barcode position, not fixed image quarters
