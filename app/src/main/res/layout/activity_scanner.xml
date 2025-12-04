@@ -195,7 +195,7 @@
         android:layout_marginEnd="@dimen/spacing_lg"
         android:layout_marginBottom="@dimen/spacing_xl"
         android:background="@drawable/button_secondary"
-        android:text="Enter manually"
+        android:text="Manuell eingeben"
         android:textAllCaps="false"
         android:textColor="@color/secondary"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -213,6 +213,28 @@
         app:layout_constraintEnd_toEndOf="@id/scannerFrame"
         app:layout_constraintStart_toStartOf="@id/scannerFrame"
         app:layout_constraintTop_toTopOf="@id/scannerFrame" />
+
+    <!-- Barcode highlight overlay - positioned relative to previewView -->
+    <View
+        android:id="@+id/barcodeHighlight"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/highlight_barcode"
+        android:visibility="gone"
+        android:elevation="10dp"
+        app:layout_constraintStart_toStartOf="@id/previewView"
+        app:layout_constraintTop_toTopOf="@id/previewView" />
+
+    <!-- PIN highlight overlay - positioned relative to previewView -->
+    <View
+        android:id="@+id/pinHighlight"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/highlight_pin"
+        android:visibility="gone"
+        android:elevation="10dp"
+        app:layout_constraintStart_toStartOf="@id/previewView"
+        app:layout_constraintTop_toTopOf="@id/previewView" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
 

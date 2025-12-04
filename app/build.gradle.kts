@@ -75,6 +75,9 @@ dependencies {
     // HTTP Client for direct form submission
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     
+    // ONNX Runtime for ML model inference
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
+    
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

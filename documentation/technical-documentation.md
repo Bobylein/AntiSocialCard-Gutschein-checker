@@ -92,16 +92,52 @@ abstract class Market {
 
 ### Barcode Scanning (ScannerActivity)
 
-Uses CameraX with ML Kit Barcode Scanner:
+Uses CameraX with ML Kit Barcode Scanner with enhanced distance scanning:
 
-1. Initialize camera provider
-2. Bind Preview and ImageAnalysis use cases
-3. Process each frame with ML Kit BarcodeScanner
-4. Filter valid barcodes (8-25 digits)
-5. Display detected barcode for user confirmation
+1. **Camera Configuration**:
+   - High-resolution ImageAnalysis (1920x1080 target)
+   - YUV_420_888 output format for better quality
+   - Continuous autofocus via Camera2Interop
+   - Optimized exposure settings
 
-### OCR PIN Capture (PinEntryActivity)
+2. **ML Kit Configuration**:
+   - BarcodeScannerOptions with all formats enabled
+   - Optimized for distance scanning
 
+3. **Processing Flow**:
+   - Initialize camera provider
+   - Bind Preview and ImageAnalysis use cases
+   - Process each frame with ML Kit BarcodeScanner
+   - Extract bounding boxes for visual highlighting
+   - Filter valid barcodes (4+ digits)
+   - Display detected barcode with visual highlight
+
+4. **Visual Feedback**:
+   - Green highlight overlay for detected barcode
+   - Blue highlight overlay for detected PIN
+   - Coordinate conversion from image space to screen space
+   - Highlights positioned relative to preview view
+
+5. **User Interaction**:
+   - Pinch-to-zoom gesture support
+   - User must confirm detection before navigation
+   - Manual entry option always available
+
+### OCR PIN Capture
+
+#### ScannerActivity (Automatic PIN Detection)
+Uses region-of-interest (ROI) detection for improved accuracy:
+
+1. **Barcode Detection**: First detects barcode and extracts bounding box
+2. **PIN Region Calculation**: 
+   - Calculates upper-right corner region (40% width, 50% height)
+   - PIN is typically located in upper-right corner of barcode
+3. **Image Cropping**: Crops image to PIN region before OCR
+4. **Text Recognition**: Processes cropped region with ML Kit Text Recognition
+5. **Fallback**: If ROI detection fails, falls back to full-image OCR
+6. **Visual Highlight**: Blue overlay shows detected PIN region
+
+#### PinEntryActivity (Manual PIN Capture)
 Uses CameraX with ML Kit Text Recognition:
 
 1. Capture image on button press
@@ -211,6 +247,38 @@ var balancePatterns = [
 7. Network error recovery
 
 ## Recent Improvements
+
+### v1.3 - Enhanced Barcode Scanning and Visual Feedback
+
+**Improved Scanning Distance:**
+- High-resolution ImageAnalysis (1920x1080) for better detail capture
+- YUV_420_888 output format for superior image quality
+- Continuous autofocus via Camera2Interop for sharp images at all distances
+- Optimized camera exposure settings
+
+**Visual Highlighting:**
+- Green overlay highlights detected barcode region
+- Blue overlay highlights detected PIN region
+- Accurate coordinate conversion from image space to screen space
+- Highlights positioned dynamically based on detection bounding boxes
+
+**PIN Detection Improvements:**
+- Region-of-interest (ROI) detection focusing on upper-right corner
+- Image cropping to PIN region before OCR processing
+- Improved accuracy by reducing noise from other text
+- Fallback to full-image OCR if ROI detection fails
+
+**User Experience:**
+- Pinch-to-zoom gesture support for manual distance adjustment
+- User confirmation required before navigation (no auto-navigate)
+- Visual feedback shows exactly what was detected
+- Better control over scanning process
+
+**Technical Details:**
+- Stores actual image dimensions from ImageProxy for accurate coordinate conversion
+- Calculates scale factors based on aspect ratio differences
+- Handles letterboxing and pillarboxing correctly
+- Proper elevation and z-ordering for highlight overlays
 
 ### v1.2 - Native Touch Simulation for CAPTCHA Focus
 - **Native Android Touch Events**: Uses MotionEvent.obtain() to simulate touch at CAPTCHA coordinates
