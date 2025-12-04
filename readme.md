@@ -98,6 +98,12 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.8**:
+  - **Simplified Main Screen UI**:
+    - Redesigned main screen to show three large logos (REWE, ALDI, Lidl) without additional explanations
+    - Each logo uses brand colors: REWE (red), ALDI (blue), Lidl (yellow)
+    - Clean, minimalist interface with evenly distributed logo cards
+    - Removed header, subtitle, and instructions section for cleaner design
 - **1.7**:
   - **REWE Performance Optimization**:
     - Image blocking for REWE pages to reduce loading time

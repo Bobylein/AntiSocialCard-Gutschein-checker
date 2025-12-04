@@ -371,6 +371,15 @@ REWE gift cards require landscape card orientation to scan the barcode, but the 
   - No overlap with barcode area - PIN region starts from barcode right edge and ends at barcode top
   - Improved PIN detection by focusing on actual corner location
 
+### v1.8 - Simplified Main Screen UI
+- **Redesigned Main Screen**:
+  - Removed header, subtitle, and instructions section
+  - Three large logo cards evenly distributed vertically
+  - Each card uses brand colors: REWE (red #CC071E), ALDI (blue #00529B), Lidl (yellow #FFD100)
+  - Large, bold text logos (48sp) centered on each card
+  - Clean, minimalist interface focusing on market selection
+  - Cards maintain click handlers and navigation functionality
+
 ## Future Improvements
 
 - Add more market implementations
