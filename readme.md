@@ -11,8 +11,10 @@ An Android application for checking gift card balances by scanning barcodes and 
   - Pinch-to-zoom support for manual adjustment
   - User confirmation required before proceeding
 - **Smart PIN Detection**: 
-  - Region-of-interest detection focusing on upper-right corner of barcode
-  - Improved OCR accuracy by cropping to PIN region
+  - Rotation-aware region-of-interest detection
+  - Handles portrait phone + landscape card orientation (for REWE)
+  - Multi-orientation OCR (tries 4 rotations for best result)
+  - Market-specific PIN location detection
 - **OCR PIN Capture**: Optionally scan the PIN using OCR, or enter it manually
 - **WebView Balance Check**: Automatically fill and submit balance check forms
 - **Multi-Market Support**: Modular architecture for easy addition of new retailers
@@ -96,6 +98,13 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.6**: 
+  - **Fixed REWE PIN detection**: Rotation-aware PIN region calculation
+  - Works correctly when phone is portrait but card is held landscape
+  - PIN search region now relative to barcode position, not fixed image quarters
+  - Improved coordinate transformation for cropping rotated images
+  - Better fallback strategy with rotation-aware wider search region
+  - Multi-orientation OCR tries 4 rotations (270°, 0°, 90°, 180°)
 - **1.5**: 
   - Fixed Lidl card number extraction: now uses last 20 digits (same as ALDI)
   - Added REWE TYPE_2 support: detects Aztec barcodes and extracts first 13 digits
