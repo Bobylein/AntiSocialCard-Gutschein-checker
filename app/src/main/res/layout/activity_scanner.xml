@@ -145,7 +145,7 @@
                 android:id="@+id/tvDetectedLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Barcode detected:"
+                android:text="Erkannt:"
                 android:textColor="@color/text_secondary"
                 android:textSize="@dimen/text_caption" />
 
@@ -154,10 +154,23 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/spacing_xs"
+                android:text="Barcode: -"
                 android:textColor="@color/on_surface"
                 android:textSize="@dimen/text_body"
                 android:textStyle="bold"
-                tools:text="1234567890123456789" />
+                tools:text="Barcode: 1234567890123456789" />
+
+            <TextView
+                android:id="@+id/tvDetectedPin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_xs"
+                android:text="PIN: -"
+                android:textColor="@color/on_surface"
+                android:textSize="@dimen/text_body"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:text="PIN: 1234" />
 
             <Button
                 android:id="@+id/btnUseBarcode"
