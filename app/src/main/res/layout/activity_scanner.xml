@@ -17,59 +17,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Dark overlay with transparent center -->
-    <View
-        android:id="@+id/overlayTop"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="@color/scanner_overlay"
-        app:layout_constraintBottom_toTopOf="@id/scannerFrame"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <View
-        android:id="@+id/overlayLeft"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="@color/scanner_overlay"
-        app:layout_constraintBottom_toTopOf="@id/overlayBottom"
-        app:layout_constraintEnd_toStartOf="@id/scannerFrame"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/overlayTop" />
-
-    <View
-        android:id="@+id/overlayRight"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="@color/scanner_overlay"
-        app:layout_constraintBottom_toTopOf="@id/overlayBottom"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/scannerFrame"
-        app:layout_constraintTop_toBottomOf="@id/overlayTop" />
-
-    <View
-        android:id="@+id/overlayBottom"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="@color/scanner_overlay"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/scannerFrame" />
-
-    <!-- Scanner frame - länglich für Barcode -->
-    <View
-        android:id="@+id/scannerFrame"
-        android:layout_width="@dimen/scanner_frame_width"
-        android:layout_height="@dimen/scanner_frame_height"
-        android:background="@drawable/scanner_frame"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.4" />
-
     <!-- Header -->
     <LinearLayout
         android:id="@+id/header"
@@ -109,15 +56,17 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/spacing_lg"
-        android:layout_marginTop="@dimen/spacing_md"
         android:layout_marginEnd="@dimen/spacing_lg"
         android:gravity="center"
         android:text="@string/scanner_instruction"
         android:textColor="@color/on_primary"
         android:textSize="@dimen/text_body"
+        android:background="#80000000"
+        android:padding="@dimen/spacing_sm"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/scannerFrame" />
+        app:layout_constraintBottom_toTopOf="@id/cardDetected"
+        app:layout_constraintVertical_bias="0.7" />
 
     <!-- Detected barcode display -->
     <androidx.cardview.widget.CardView
@@ -209,10 +158,10 @@
         android:layout_height="wrap_content"
         android:indeterminateTint="@color/secondary"
         android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@id/scannerFrame"
-        app:layout_constraintEnd_toEndOf="@id/scannerFrame"
-        app:layout_constraintStart_toStartOf="@id/scannerFrame"
-        app:layout_constraintTop_toTopOf="@id/scannerFrame" />
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <!-- Expected barcode search region (RED) - positioned relative to previewView -->
     <View

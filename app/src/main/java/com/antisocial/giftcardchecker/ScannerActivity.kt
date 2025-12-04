@@ -615,23 +615,10 @@ class ScannerActivity : AppCompatActivity() {
                 Log.d(TAG, "ImageProxy dimensions: ${imageProxy.width}x${imageProxy.height}")
                 Log.d(TAG, "ML Kit coordinate dimensions: ${mlKitWidth}x${mlKitHeight} (rotation: $rotationDegrees)")
 
-                // Calculate and set the expected barcode search region (center of image)
-                // The barcode should be roughly in the center, spanning most of the width
-                val expectedBarcodeRegion = Rect(
-                    (mlKitWidth * 0.1).toInt(),      // 10% from left
-                    (mlKitHeight * 0.3).toInt(),    // 30% from top
-                    (mlKitWidth * 0.9).toInt(),      // 90% from left (80% width)
-                    (mlKitHeight * 0.55).toInt()     // 55% from top (25% height)
-                )
-                
-                // Store dimensions and barcode region immediately for highlighting
+                // Store dimensions for highlight positioning
                 imageAnalysisWidth = mlKitWidth
                 imageAnalysisHeight = mlKitHeight
                 imageRotationDegrees = rotationDegrees
-                barcodeSearchRegion = expectedBarcodeRegion
-                
-                // Update highlights on UI thread to show expected barcode region
-                runOnUiThread { updateHighlights() }
 
                 var barcodeResult: String? = null
                 var barcodeBoundingBox: Rect? = null
@@ -673,6 +660,10 @@ class ScannerActivity : AppCompatActivity() {
                                     
                                     barcodeResult = extractCardNumber(it, marketType, reweCardType)
                                     barcodeBoundingBox = boundingBox
+                                    
+                                    // Set barcode search region (RED highlight) to show detected barcode position
+                                    barcodeSearchRegion = boundingBox
+                                    runOnUiThread { updateHighlights() }
                                     
                                     // Process PIN detection with region-of-interest if barcode found
                                     if (barcodeBoundingBox != null) {
