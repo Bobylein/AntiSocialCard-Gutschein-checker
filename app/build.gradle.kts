@@ -72,6 +72,9 @@ dependencies {
     // WebView (built-in, but we need webkit for modern features)
     implementation("androidx.webkit:webkit:1.9.0")
     
+    // HTTP Client for direct form submission
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

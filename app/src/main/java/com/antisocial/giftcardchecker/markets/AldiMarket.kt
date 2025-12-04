@@ -9,16 +9,16 @@ import java.util.regex.Pattern
 /**
  * Market implementation for ALDI Nord gift card balance checking.
  * Uses the Helaba bank service for ALDI gift card balance inquiries.
- * 
+ *
  * IMPORTANT: The balance check form is loaded in an iframe from tx-gate.com,
  * which prevents automatic JavaScript injection due to cross-origin restrictions.
  * The user must manually enter the card details in the WebView form.
- * 
+ *
  * Form fields (visible in the iframe):
- * - Gutschein: 19-digit voucher number (format: 0000 0000 0000 0000 0000)
+ * - Gutschein: 20-digit voucher number
  * - PIN: 4-digit PIN
  * - Lösung: CAPTCHA solution
- * 
+ *
  * Note: This market requires manual user interaction due to iframe cross-origin restrictions.
  */
 class AldiMarket : Market() {
@@ -28,20 +28,26 @@ class AldiMarket : Market() {
     override val displayName: String = "ALDI Nord"
     
     // Official ALDI Nord gift card balance check URL
-    // Navigate directly to the iframe URL to avoid cross-origin restrictions
-    // The form is at balancechecks.tx-gate.com/balance.php?cid=59
-    override val balanceCheckUrl: String = "https://balancechecks.tx-gate.com/balance.php?cid=59"
+    // Note: The form is in a cross-origin iframe from balancechecks.tx-gate.com
+    // which cannot be accessed by JavaScript due to same-origin policy.
+    // The iframe URL cannot be loaded directly (returns blank page due to referrer check).
+    override val balanceCheckUrl: String = "https://www.helaba.com/de/aldi/"
     
     override val brandColor: Int = Color.parseColor("#00529B") // ALDI Blue
     
-    // Now we can automate form filling since we're navigating directly to the form page
+    // ALDI uses a cross-origin iframe, but we can navigate to the iframe URL directly
+    // after loading the parent page (cookies will be shared), then auto-fill the form.
     override val requiresManualEntry: Boolean = false
+    
+    // The iframe URL that contains the actual form
+    val iframeFormUrl: String = "https://balancechecks.tx-gate.com/balance.php?cid=59"
     
     /**
      * JavaScript to fill in the Gutschein (voucher number) and PIN fields.
-     * ALDI cards use a 19-digit voucher number and 4-digit PIN.
-     * 
-     * Note: The CAPTCHA (Lösung field) must be filled by the user manually.
+     * ALDI cards use a 20-digit voucher number and 4-digit PIN.
+     *
+     * Note: Due to cross-origin iframe restrictions, this script typically cannot
+     * access the form fields. Manual entry is required (see requiresManualEntry).
      */
     override fun getFormFillScript(card: GiftCard): String {
         return """
@@ -50,179 +56,462 @@ class AldiMarket : Market() {
                     success: false,
                     gutscheinFound: false,
                     pinFound: false,
-                    captchaFound: false
+                    captchaFound: false,
+                    cookieBannerAccepted: false,
+                    tabClicked: false,
+                    iframeLoaded: false,
+                    debug: {
+                        url: window.location.href,
+                        iframeFound: false,
+                        iframeUrl: null,
+                        iframeAccessible: false,
+                        error: null,
+                        allInputs: []
+                    }
                 };
                 
-                // Find the Gutschein (voucher number) field - try multiple strategies
-                var gutscheinInput = null;
-                
-                // Strategy 1: By ID
-                gutscheinInput = document.getElementById('gutschein') || 
-                                 document.getElementById('voucher') ||
-                                 document.getElementById('cardnumber') ||
-                                 document.getElementById('card_number');
-                
-                // Strategy 2: By name attribute
-                if (!gutscheinInput) {
-                    gutscheinInput = document.querySelector('input[name*="gutschein" i]') ||
-                                    document.querySelector('input[name*="voucher" i]') ||
-                                    document.querySelector('input[name*="cardnumber" i]');
-                }
-                
-                // Strategy 3: By placeholder
-                if (!gutscheinInput) {
-                    gutscheinInput = document.querySelector('input[placeholder*="0000 0000"]') ||
-                                    document.querySelector('input[placeholder*="Gutschein" i]');
-                }
-                
-                // Strategy 4: By label text
-                if (!gutscheinInput) {
-                    var labels = document.querySelectorAll('label, td, th, span');
-                    for (var i = 0; i < labels.length; i++) {
-                        var labelText = labels[i].textContent.toLowerCase();
-                        if ((labelText.indexOf('gutschein') !== -1 || labelText.indexOf('gutscheinnummer') !== -1) && 
-                            labelText.indexOf('sperren') === -1) {
-                            // Try to find input in same row/container
-                            var container = labels[i].closest('tr, div, form, table');
-                            if (container) {
-                                gutscheinInput = container.querySelector('input[type="text"]');
-                            }
-                            if (!gutscheinInput) {
-                                gutscheinInput = labels[i].nextElementSibling;
-                                if (gutscheinInput && gutscheinInput.tagName !== 'INPUT') {
-                                    gutscheinInput = gutscheinInput.querySelector('input[type="text"]');
-                                }
-                            }
-                            if (gutscheinInput && gutscheinInput.tagName === 'INPUT') {
+                // First, try to accept cookie banner if present
+                try {
+                    // Look for cookie banner accept button (common patterns)
+                    var cookieAcceptButton = document.querySelector('button[id*="cookie" i][id*="accept" i]') ||
+                                           document.querySelector('button[id="cookiebannerAccept"]') ||
+                                           document.querySelector('#cookiebannerAccept');
+                    
+                    // Try by text content
+                    if (!cookieAcceptButton) {
+                        var buttons = document.querySelectorAll('button');
+                        for (var i = 0; i < buttons.length; i++) {
+                            var text = (buttons[i].textContent || '').toLowerCase();
+                            if ((text.indexOf('annehmen') !== -1 || text.indexOf('accept') !== -1) && 
+                                (text.indexOf('cookie') !== -1 || buttons[i].id.indexOf('cookie') !== -1)) {
+                                cookieAcceptButton = buttons[i];
                                 break;
                             }
                         }
                     }
+                    
+                    if (cookieAcceptButton) {
+                        cookieAcceptButton.click();
+                        result.cookieBannerAccepted = true;
+                        // Wait a bit for banner to disappear
+                        setTimeout(function() {}, 500);
+                    }
+                } catch (e) {
+                    // Ignore cookie banner errors
                 }
                 
-                // Strategy 5: Find first text input with long placeholder (likely voucher field)
-                if (!gutscheinInput) {
-                    var inputs = document.querySelectorAll('input[type="text"]');
-                    for (var j = 0; j < inputs.length; j++) {
-                        var placeholder = (inputs[j].placeholder || '').replace(/\s/g, '');
-                        if (placeholder.length >= 16) {
-                            gutscheinInput = inputs[j];
+                // Check if we're on the Helaba page with tabs - "Guthaben abfragen" tab is active by default
+                // IMPORTANT: Only use "Guthaben abfragen" (balance inquiry), NEVER use "Gutschein sperren" (voucher lock)
+                // Only click if it's not already active
+                var guthabenTab = null;
+                try {
+                    // Look for tab with "Guthaben abfragen" text
+                    // Explicitly avoid "Gutschein sperren" tab
+                    var tabs = document.querySelectorAll('.tab, [class*="tab"], [id*="tab"], button, a');
+                    for (var t = 0; t < tabs.length; t++) {
+                        var tabText = (tabs[t].textContent || '').toLowerCase();
+                        // Explicitly check that this is NOT the "Gutschein sperren" tab
+                        var isSperrenTab = tabText.indexOf('sperren') !== -1 || 
+                                          tabText.indexOf('lock') !== -1 ||
+                                          tabText.indexOf('block') !== -1;
+                        if (isSperrenTab) {
+                            // Skip this tab - we only want "Guthaben abfragen"
+                            continue;
+                        }
+                        // Look for "Guthaben abfragen" tab
+                        if ((tabText.indexOf('guthaben abfragen') !== -1 || 
+                             tabText.indexOf('guthabenabfrage') !== -1 ||
+                             (tabText.indexOf('guthaben') !== -1 && tabText.indexOf('abfragen') !== -1)) &&
+                            tabs[t].offsetParent !== null) { // Element is visible
+                            guthabenTab = tabs[t];
                             break;
                         }
                     }
+                    
+                    if (guthabenTab) {
+                        // Check if tab is already active (has active class, selected class, or aria-selected)
+                        var isActive = guthabenTab.classList.contains('active') ||
+                                      guthabenTab.classList.contains('selected') ||
+                                      guthabenTab.classList.contains('ui-tabs-active') ||
+                                      guthabenTab.getAttribute('aria-selected') === 'true' ||
+                                      guthabenTab.getAttribute('aria-current') === 'page' ||
+                                      guthabenTab.getAttribute('class') && guthabenTab.getAttribute('class').indexOf('active') !== -1;
+                        
+                        // Also check if iframe is already visible (means tab is already active)
+                        var iframeVisible = false;
+                        var iframe = document.querySelector('iframe[src*="balancechecks.tx-gate.com"]') ||
+                                     document.querySelector('iframe[name="IR-iFrame"]') ||
+                                     document.querySelector('iframe[src*="balance.php"]');
+                        if (iframe) {
+                            var iframeStyle = window.getComputedStyle(iframe);
+                            iframeVisible = iframeStyle.display !== 'none' && iframeStyle.visibility !== 'hidden' && iframeStyle.opacity !== '0';
+                        }
+                        
+                        if (!isActive && !iframeVisible) {
+                            // Tab exists but is not active, click it
+                            // Prevent default navigation if it's a link
+                            try {
+                                var event = new MouseEvent('click', {
+                                    bubbles: true,
+                                    cancelable: true,
+                                    view: window
+                                });
+                                guthabenTab.dispatchEvent(event);
+                                // Also try regular click but prevent default
+                                if (guthabenTab.href) {
+                                    // It's a link, prevent navigation
+                                    event.preventDefault();
+                                }
+                                guthabenTab.click();
+                            } catch (e) {
+                                // Fallback to regular click
+                                guthabenTab.click();
+                            }
+                            result.tabClicked = true;
+                            // Wait a bit for tab to switch and iframe to load
+                            setTimeout(function() {}, 1000);
+                        } else {
+                            // Tab already active or iframe already visible, no need to click
+                            result.tabClicked = false;
+                            result.iframeLoaded = iframeVisible; // If iframe is visible, it's loaded
+                        }
+                    } else {
+                        // No tab found, assume we're already on the right page
+                        result.tabClicked = false;
+                    }
+                } catch (e) {
+                    // Ignore tab click errors
+                    result.tabClicked = false;
                 }
                 
-                // Strategy 6: First text input in form (fallback)
-                if (!gutscheinInput) {
-                    var form = document.querySelector('form');
-                    if (form) {
-                        gutscheinInput = form.querySelector('input[type="text"]:not([type="hidden"])');
+                // First, check if form fields are directly on the page (mobile view)
+                // Try multiple selectors for card number field
+                var gutscheinInputDirect = document.querySelector('input[name="cardnumberfield"]') ||
+                                          document.querySelector('input[name*="card" i]') ||
+                                          document.querySelector('input[name*="gutschein" i]') ||
+                                          document.querySelector('input[placeholder*="0000"]') ||
+                                          null;
+                
+                // If not found, try finding by table structure
+                if (!gutscheinInputDirect) {
+                    var rows = document.querySelectorAll('tr');
+                    for (var r = 0; r < rows.length; r++) {
+                        var rowText = (rows[r].textContent || '').toLowerCase();
+                        if (rowText.indexOf('gutschein') !== -1 || rowText.indexOf('guthaben') !== -1) {
+                            var inputs = rows[r].querySelectorAll('input[type="text"]');
+                            if (inputs.length > 0) {
+                                gutscheinInputDirect = inputs[0];
+                                break;
+                            }
+                        }
                     }
                 }
                 
-                // Find the PIN field - try multiple strategies
-                var pinInput = null;
+                // Try multiple selectors for PIN field
+                var pinInputDirect = document.querySelector('input[name="pin"]') ||
+                                    document.getElementById('myPw') ||
+                                    document.querySelector('input[name*="pin" i]') ||
+                                    document.querySelector('input[id*="pin" i]') ||
+                                    document.querySelector('input[id*="pw" i]') ||
+                                    document.querySelector('input[type="password"]') ||
+                                    null;
                 
-                // Strategy 1: By ID
-                pinInput = document.getElementById('pin') || 
-                          document.getElementById('cardpin') ||
-                          document.getElementById('card_pin');
-                
-                // Strategy 2: By name attribute
-                if (!pinInput) {
-                    pinInput = document.querySelector('input[name*="pin" i]');
-                }
-                
-                // Strategy 3: By placeholder
-                if (!pinInput) {
-                    pinInput = document.querySelector('input[placeholder*="0000"]') ||
-                               document.querySelector('input[placeholder*="PIN" i]');
-                }
-                
-                // Strategy 4: Password input (some forms use password type for PIN)
-                if (!pinInput) {
-                    pinInput = document.querySelector('input[type="password"]');
-                }
-                
-                // Strategy 5: By label text
-                if (!pinInput) {
-                    var labels = document.querySelectorAll('label, td, th, span');
-                    for (var k = 0; k < labels.length; k++) {
-                        var labelText = labels[k].textContent.trim().toLowerCase();
-                        if (labelText === 'pin' || labelText === 'pin:' || labelText.indexOf('pin') !== -1) {
-                            var container = labels[k].closest('tr, div, form, table');
-                            if (container) {
-                                pinInput = container.querySelector('input[type="text"], input[type="password"]');
+                // If not found, try finding by table structure
+                if (!pinInputDirect) {
+                    var rows = document.querySelectorAll('tr');
+                    for (var r = 0; r < rows.length; r++) {
+                        var rowText = (rows[r].textContent || '').toLowerCase();
+                        if (rowText.indexOf('pin') !== -1 && rowText.indexOf('anzeigen') === -1) {
+                            var inputs = rows[r].querySelectorAll('input');
+                            for (var i = 0; i < inputs.length; i++) {
+                                if (inputs[i].type === 'password' || inputs[i].type === 'text') {
+                                    pinInputDirect = inputs[i];
+                                    break;
+                                }
                             }
+                            if (pinInputDirect) break;
+                        }
+                    }
+                }
+                
+                // If form fields are directly accessible, fill them (mobile view)
+                if (gutscheinInputDirect || pinInputDirect) {
+                    result.debug.iframeFound = false;
+                    result.debug.iframeAccessible = false;
+                    result.iframeLoaded = true; // No iframe needed
+                    
+                    // Fill form directly on page
+                    if (gutscheinInputDirect) {
+                        gutscheinInputDirect.focus();
+                        gutscheinInputDirect.value = '${card.cardNumber}';
+                        try {
+                            gutscheinInputDirect.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                            gutscheinInputDirect.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                            gutscheinInputDirect.dispatchEvent(new Event('keyup', { bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        gutscheinInputDirect.setAttribute('value', '${card.cardNumber}');
+                        result.gutscheinFound = true;
+                    }
+                    
+                    if (pinInputDirect) {
+                        pinInputDirect.focus();
+                        pinInputDirect.value = '${card.pin}';
+                        try {
+                            pinInputDirect.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                            pinInputDirect.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                            pinInputDirect.dispatchEvent(new Event('keyup', { bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        pinInputDirect.setAttribute('value', '${card.pin}');
+                        result.pinFound = true;
+                    }
+                    
+                    var captchaInputDirect = document.querySelector('input[name="input"]');
+                    result.captchaFound = captchaInputDirect !== null;
+                    result.success = result.gutscheinFound && result.pinFound;
+                    
+                    // Get all inputs for debugging
+                    var allInputs = document.querySelectorAll('input');
+                    for (var i = 0; i < allInputs.length; i++) {
+                        result.debug.allInputs.push({
+                            name: allInputs[i].name || 'no-name',
+                            id: allInputs[i].id || 'no-id',
+                            type: allInputs[i].type || 'no-type',
+                            className: allInputs[i].className || 'no-class'
+                        });
+                    }
+                    
+                    return JSON.stringify(result);
+                }
+                
+                // If no direct form fields, try to find the iframe containing the form (desktop view)
+                var iframe = document.querySelector('iframe[src*="balancechecks.tx-gate.com"]') ||
+                             document.querySelector('iframe[name="IR-iFrame"]') ||
+                             document.querySelector('iframe[src*="balance.php"]') ||
+                             document.querySelector('iframe');
+                
+                if (iframe) {
+                    result.debug.iframeFound = true;
+                    result.debug.iframeUrl = iframe.src || iframe.getAttribute('src');
+                    
+                    // Check if iframe is loaded (has content)
+                    try {
+                        var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (iframeDoc && iframeDoc.body && iframeDoc.body.children.length > 0) {
+                            result.iframeLoaded = true;
+                            result.debug.iframeAccessible = true;
+                        } else {
+                            // Iframe exists but not loaded yet
+                            result.iframeLoaded = false;
+                            return JSON.stringify(result);
+                        }
+                    } catch (e) {
+                        // Cross-origin - check if iframe src is set (means it's loading)
+                        if (iframe.src && iframe.src.length > 0) {
+                            result.iframeLoaded = true; // Assume loaded if src is set
+                        } else {
+                            result.iframeLoaded = false;
+                            return JSON.stringify(result);
+                        }
+                    }
+                    
+                    // If we found an iframe and it's loaded, try to access it
+                    try {
+                        var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (iframeDoc) {
+                            
+                            // Try to accept cookie banner in iframe if present
+                            try {
+                                var iframeCookieButton = iframeDoc.querySelector('button[id*="cookie" i][id*="accept" i]') ||
+                                                       iframeDoc.querySelector('#cookiebannerAccept');
+                                if (!iframeCookieButton) {
+                                    var iframeButtons = iframeDoc.querySelectorAll('button');
+                                    for (var j = 0; j < iframeButtons.length; j++) {
+                                        var btnText = (iframeButtons[j].textContent || '').toLowerCase();
+                                        if ((btnText.indexOf('annehmen') !== -1 || btnText.indexOf('accept') !== -1) && 
+                                            (btnText.indexOf('cookie') !== -1 || iframeButtons[j].id.indexOf('cookie') !== -1)) {
+                                            iframeCookieButton = iframeButtons[j];
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (iframeCookieButton) {
+                                    iframeCookieButton.click();
+                                    result.cookieBannerAccepted = true;
+                                }
+                            } catch (e) {}
+                            
+                            // Get all inputs from iframe for debugging
+                            var iframeInputs = iframeDoc.querySelectorAll('input');
+                            for (var i = 0; i < iframeInputs.length; i++) {
+                                result.debug.allInputs.push({
+                                    name: iframeInputs[i].name || 'no-name',
+                                    id: iframeInputs[i].id || 'no-id',
+                                    type: iframeInputs[i].type || 'no-type',
+                                    className: iframeInputs[i].className || 'no-class'
+                                });
+                            }
+                            
+                            // Find and fill form fields in iframe
+                            // Try multiple selectors for card number field
+                            var gutscheinInput = iframeDoc.querySelector('input[name="cardnumberfield"]') ||
+                                                iframeDoc.querySelector('input[name*="card" i]') ||
+                                                iframeDoc.querySelector('input[name*="gutschein" i]') ||
+                                                iframeDoc.querySelector('input[placeholder*="0000"]') ||
+                                                null;
+                            
+                            // If not found, try finding by table structure
+                            if (!gutscheinInput) {
+                                var rows = iframeDoc.querySelectorAll('tr');
+                                for (var r = 0; r < rows.length; r++) {
+                                    var rowText = (rows[r].textContent || '').toLowerCase();
+                                    if (rowText.indexOf('gutschein') !== -1 || rowText.indexOf('guthaben') !== -1) {
+                                        var inputs = rows[r].querySelectorAll('input[type="text"]');
+                                        if (inputs.length > 0) {
+                                            gutscheinInput = inputs[0];
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Try multiple selectors for PIN field
+                            var pinInput = iframeDoc.querySelector('input[name="pin"]') ||
+                                          iframeDoc.getElementById('myPw') ||
+                                          iframeDoc.querySelector('input[name*="pin" i]') ||
+                                          iframeDoc.querySelector('input[id*="pin" i]') ||
+                                          iframeDoc.querySelector('input[id*="pw" i]') ||
+                                          iframeDoc.querySelector('input[type="password"]') ||
+                                          null;
+                            
+                            // If not found, try finding by table structure
                             if (!pinInput) {
-                                pinInput = labels[k].nextElementSibling;
-                                if (pinInput && pinInput.tagName !== 'INPUT') {
-                                    pinInput = pinInput.querySelector('input[type="text"], input[type="password"]');
+                                var rows = iframeDoc.querySelectorAll('tr');
+                                for (var r = 0; r < rows.length; r++) {
+                                    var rowText = (rows[r].textContent || '').toLowerCase();
+                                    if (rowText.indexOf('pin') !== -1 && rowText.indexOf('anzeigen') === -1) {
+                                        var inputs = rows[r].querySelectorAll('input');
+                                        for (var i = 0; i < inputs.length; i++) {
+                                            if (inputs[i].type === 'password' || inputs[i].type === 'text') {
+                                                pinInput = inputs[i];
+                                                break;
+                                            }
+                                        }
+                                        if (pinInput) break;
+                                    }
                                 }
                             }
-                            if (pinInput && pinInput.tagName === 'INPUT') {
+                            
+                            var captchaInput = iframeDoc.querySelector('input[name="input"]');
+                            
+                            // Fill Gutschein field
+                            if (gutscheinInput) {
+                                gutscheinInput.focus();
+                                gutscheinInput.value = '${card.cardNumber}';
+                                try {
+                                    gutscheinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                                    gutscheinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                                    gutscheinInput.dispatchEvent(new Event('keyup', { bubbles: true, cancelable: true }));
+                                } catch(e) {}
+                                gutscheinInput.setAttribute('value', '${card.cardNumber}');
+                                result.gutscheinFound = true;
+                            }
+                            
+                            // Fill PIN field
+                            if (pinInput) {
+                                pinInput.focus();
+                                pinInput.value = '${card.pin}';
+                                try {
+                                    pinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                                    pinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                                    pinInput.dispatchEvent(new Event('keyup', { bubbles: true, cancelable: true }));
+                                } catch(e) {}
+                                pinInput.setAttribute('value', '${card.pin}');
+                                result.pinFound = true;
+                            }
+                            
+                            result.captchaFound = captchaInput !== null;
+                            result.success = result.gutscheinFound && result.pinFound;
+                        }
+                    } catch (e) {
+                        // Cross-origin - we're probably on the direct URL, so fill form directly
+                        result.debug.error = 'Cross-origin iframe - filling form directly';
+                    }
+                }
+                
+                // Fill form directly on page (when on balancechecks.tx-gate.com directly)
+                // Try multiple selectors to find the card number field
+                var gutscheinInput = document.querySelector('input[name="cardnumberfield"]') ||
+                                    document.querySelector('input[name*="card" i]') ||
+                                    document.querySelector('input[name*="gutschein" i]') ||
+                                    document.querySelector('input[placeholder*="0000"]') ||
+                                    null;
+                
+                // If not found by name/placeholder, try finding by table structure (ALDI form uses tables)
+                if (!gutscheinInput) {
+                    var rows = document.querySelectorAll('tr');
+                    for (var r = 0; r < rows.length; r++) {
+                        var rowText = (rows[r].textContent || '').toLowerCase();
+                        if (rowText.indexOf('gutschein') !== -1 || rowText.indexOf('guthaben') !== -1) {
+                            var inputs = rows[r].querySelectorAll('input[type="text"]');
+                            if (inputs.length > 0) {
+                                gutscheinInput = inputs[0];
                                 break;
                             }
                         }
                     }
                 }
                 
-                // Strategy 6: Second text input in form (fallback - usually PIN comes after voucher)
-                if (!pinInput && gutscheinInput) {
-                    var form = document.querySelector('form');
-                    if (form) {
-                        var allInputs = Array.from(form.querySelectorAll('input[type="text"], input[type="password"]'));
-                        var gutscheinIndex = allInputs.indexOf(gutscheinInput);
-                        if (gutscheinIndex !== -1 && gutscheinIndex + 1 < allInputs.length) {
-                            pinInput = allInputs[gutscheinIndex + 1];
-                        }
-                    }
-                }
+                // Try multiple selectors to find the PIN field
+                var pinInput = document.querySelector('input[name="pin"]') ||
+                              document.getElementById('myPw') ||
+                              document.querySelector('input[name*="pin" i]') ||
+                              document.querySelector('input[id*="pin" i]') ||
+                              document.querySelector('input[id*="pw" i]') ||
+                              document.querySelector('input[type="password"]') ||
+                              null;
                 
-                // Check for CAPTCHA field (Lösung)
-                var captchaInput = document.querySelector('input[name*="captcha" i]');
-                if (!captchaInput) {
-                    var labels = document.querySelectorAll('label, td, th');
-                    for (var m = 0; m < labels.length; m++) {
-                        var labelText = labels[m].textContent.toLowerCase();
-                        if (labelText.indexOf('lösung') !== -1 || labelText.indexOf('loesung') !== -1) {
-                            var nextInput = labels[m].parentElement.querySelector('input');
-                            if (!nextInput) {
-                                nextInput = labels[m].nextElementSibling;
-                                if (nextInput && nextInput.tagName !== 'INPUT') {
-                                    nextInput = nextInput.querySelector('input');
+                // If not found, try finding by table structure
+                if (!pinInput) {
+                    var rows = document.querySelectorAll('tr');
+                    for (var r = 0; r < rows.length; r++) {
+                        var rowText = (rows[r].textContent || '').toLowerCase();
+                        if (rowText.indexOf('pin') !== -1 && rowText.indexOf('anzeigen') === -1) {
+                            var inputs = rows[r].querySelectorAll('input');
+                            for (var i = 0; i < inputs.length; i++) {
+                                if (inputs[i].type === 'password' || inputs[i].type === 'text') {
+                                    pinInput = inputs[i];
+                                    break;
                                 }
                             }
-                            if (nextInput && nextInput.tagName === 'INPUT') {
-                                captchaInput = nextInput;
-                                break;
-                            }
+                            if (pinInput) break;
                         }
                     }
                 }
                 
-                // Fill the Gutschein field with proper event triggering
+                var captchaInput = document.querySelector('input[name="input"]');
+                
+                // Fill Gutschein field
                 if (gutscheinInput) {
                     gutscheinInput.focus();
                     gutscheinInput.value = '${card.cardNumber}';
-                    // Trigger multiple events to ensure form validation recognizes the value
-                    gutscheinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-                    gutscheinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-                    gutscheinInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
-                    // Set value directly as well (some forms check .value directly)
+                    try {
+                        gutscheinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        gutscheinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                        gutscheinInput.dispatchEvent(new Event('keyup', { bubbles: true, cancelable: true }));
+                    } catch(e) {}
                     gutscheinInput.setAttribute('value', '${card.cardNumber}');
                     result.gutscheinFound = true;
                 }
                 
-                // Fill the PIN field with proper event triggering
+                // Fill PIN field
                 if (pinInput) {
                     pinInput.focus();
                     pinInput.value = '${card.pin}';
-                    // Trigger multiple events to ensure form validation recognizes the value
-                    pinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-                    pinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-                    pinInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
-                    // Set value directly as well (some forms check .value directly)
+                    try {
+                        pinInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        pinInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                        pinInput.dispatchEvent(new Event('keyup', { bubbles: true, cancelable: true }));
+                    } catch(e) {}
                     pinInput.setAttribute('value', '${card.pin}');
                     result.pinFound = true;
                 }
@@ -230,7 +519,66 @@ class AldiMarket : Market() {
                 result.captchaFound = captchaInput !== null;
                 result.success = result.gutscheinFound && result.pinFound;
                 
-                return JSON.stringify(result);
+                // Get all inputs for debugging
+                var allInputs = document.querySelectorAll('input');
+                for (var i = 0; i < allInputs.length; i++) {
+                    result.debug.allInputs.push({
+                        name: allInputs[i].name || 'no-name',
+                        id: allInputs[i].id || 'no-id',
+                        type: allInputs[i].type || 'no-type',
+                        className: allInputs[i].className || 'no-class'
+                    });
+                }
+                
+                // Add debug info about found inputs
+                if (result.gutscheinFound) {
+                    if (!result.debug.foundInputs) {
+                        result.debug.foundInputs = [];
+                    }
+                    result.debug.foundInputs.push('gutschein: found');
+                }
+                if (result.pinFound) {
+                    if (!result.debug.foundInputs) {
+                        result.debug.foundInputs = [];
+                    }
+                    result.debug.foundInputs.push('pin: found');
+                }
+                if (result.captchaFound) {
+                    if (!result.debug.foundInputs) {
+                        result.debug.foundInputs = [];
+                    }
+                    result.debug.foundInputs.push('captcha: found');
+                }
+                
+                // Log to Android console for debugging
+                try {
+                    if (typeof Android !== 'undefined' && Android.log) {
+                        var logResult = JSON.stringify(result);
+                        Android.log('Form fill result: ' + logResult);
+                    }
+                } catch (logErr) {
+                    // Ignore logging errors
+                }
+                
+                try {
+                    return JSON.stringify(result);
+                } catch (jsonErr) {
+                    // Fallback if JSON.stringify fails - create a simple safe object
+                    try {
+                        return JSON.stringify({
+                            success: false,
+                            error: 'JSON serialization failed',
+                            gutscheinFound: result.gutscheinFound || false,
+                            pinFound: result.pinFound || false,
+                            captchaFound: result.captchaFound || false,
+                            redirect: result.redirect || false,
+                            redirectUrl: result.redirectUrl || null
+                        });
+                    } catch (fallbackErr) {
+                        // Last resort - return minimal safe JSON
+                        return '{"success":false,"error":"JSON serialization failed"}';
+                    }
+                }
             })();
         """.trimIndent()
     }
@@ -243,33 +591,47 @@ class AldiMarket : Market() {
             (function() {
                 // Find the Guthabenabfrage (balance check) submit button
                 var submitButton = null;
-                var buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
                 
-                for (var i = 0; i < buttons.length; i++) {
-                    var buttonText = (buttons[i].textContent || buttons[i].value || '').toLowerCase();
-                    if (buttonText.indexOf('guthabenabfrage') !== -1 || 
-                        buttonText.indexOf('guthaben') !== -1 ||
-                        buttonText.indexOf('abfragen') !== -1 ||
-                        buttonText.indexOf('prüfen') !== -1 ||
-                        buttonText.indexOf('check') !== -1) {
-                        submitButton = buttons[i];
-                        break;
+                // Strategy 1: By exact name attribute (ALDI form uses name="check")
+                submitButton = document.querySelector('input[name="check"]');
+                
+                // Strategy 2: By class name
+                if (!submitButton) {
+                    submitButton = document.querySelector('input.check');
+                }
+                
+                // Strategy 3: By value attribute
+                if (!submitButton) {
+                    var buttons = document.querySelectorAll('input[type="submit"], button[type="submit"]');
+                    for (var i = 0; i < buttons.length; i++) {
+                        var buttonValue = (buttons[i].value || buttons[i].textContent || '').toLowerCase();
+                        if (buttonValue.indexOf('guthabenabfrage') !== -1 || 
+                            buttonValue.indexOf('guthaben') !== -1 ||
+                            buttonValue.indexOf('abfragen') !== -1 ||
+                            buttonValue.indexOf('prüfen') !== -1 ||
+                            buttonValue.indexOf('check') !== -1) {
+                            submitButton = buttons[i];
+                            break;
+                        }
                     }
                 }
                 
+                // Strategy 4: First submit button in form
                 if (!submitButton) {
-                    submitButton = document.querySelector('button[type="submit"]');
+                    submitButton = document.querySelector('input[type="submit"]') ||
+                                   document.querySelector('button[type="submit"]');
                 }
                 
                 if (submitButton) {
+                    // Trigger click event
                     submitButton.click();
-                    return JSON.stringify({ success: true });
+                    return JSON.stringify({ success: true, method: 'button_click' });
                 } else {
                     // Try submitting the form directly
                     var form = document.querySelector('form');
                     if (form) {
                         form.submit();
-                        return JSON.stringify({ success: true, method: 'form' });
+                        return JSON.stringify({ success: true, method: 'form_submit' });
                     }
                 }
                 
@@ -295,12 +657,13 @@ class AldiMarket : Market() {
                 var bodyText = document.body.innerText;
                 
                 // Check for error messages (German)
-                if (bodyText.indexOf('ungültig') !== -1 || 
+                if (bodyText.indexOf('ungültig') !== -1 ||
                     bodyText.indexOf('nicht gefunden') !== -1 ||
                     bodyText.indexOf('falsch') !== -1 ||
                     bodyText.indexOf('Fehler') !== -1 ||
                     bodyText.indexOf('inkorrekt') !== -1 ||
-                    bodyText.indexOf('unbekannt') !== -1) {
+                    bodyText.indexOf('unbekannt') !== -1 ||
+                    bodyText.indexOf('gesperrt') !== -1) {
                     result.error = 'invalid_card';
                     Android.onBalanceResult(JSON.stringify(result));
                     return;
@@ -365,13 +728,14 @@ class AldiMarket : Market() {
             val lowerResponse = response.lowercase()
             
             // Check for error indicators (German)
-            if (lowerResponse.contains("ungültig") || 
+            if (lowerResponse.contains("ungültig") ||
                 lowerResponse.contains("nicht gefunden") ||
                 lowerResponse.contains("falsch") ||
                 lowerResponse.contains("fehler") ||
                 lowerResponse.contains("inkorrekt") ||
-                lowerResponse.contains("unbekannt")) {
-                return BalanceResult.invalidCard("Gutscheinnummer oder PIN ungültig")
+                lowerResponse.contains("unbekannt") ||
+                lowerResponse.contains("gesperrt")) {
+                return BalanceResult.invalidCard("Gutscheinnummer oder PIN ungültig oder Gutschein gesperrt")
             }
             
             // Check for CAPTCHA error
@@ -426,6 +790,7 @@ class AldiMarket : Market() {
                lowerHtml.contains("fehler") ||
                lowerHtml.contains("falsch") ||
                lowerHtml.contains("inkorrekt") ||
-               lowerHtml.contains("unbekannt")
+               lowerHtml.contains("unbekannt") ||
+               lowerHtml.contains("gesperrt")
     }
 }

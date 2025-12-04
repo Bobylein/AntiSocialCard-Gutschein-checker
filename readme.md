@@ -15,9 +15,9 @@ An Android application for checking gift card balances by scanning barcodes and 
 | Market | Website | Card Format | Mode |
 |--------|---------|-------------|------|
 | REWE | kartenwelt.rewe.de | Variable length barcode, PIN | Automatic |
-| ALDI Nord | helaba.com/de/aldi | 19-digit number, 4-digit PIN | Manual* |
+| ALDI Nord | helaba.com/de/aldi | 20-digit number, 4-digit PIN | Auto-fill* |
 
-*ALDI uses a cross-origin iframe for the balance check form, requiring manual entry of card details.
+*ALDI form fields are auto-filled. User must solve CAPTCHA and submit manually.
 
 ## Requirements
 
@@ -76,7 +76,7 @@ app/
 
 ## Known Limitations
 
-- CAPTCHA: Some websites (like ALDI) require CAPTCHA solving, which must be done manually
+- CAPTCHA: ALDI requires manual CAPTCHA solving and form submission
 - Website Changes: If retailers update their websites, the JavaScript selectors may need updating
 - Network Required: Balance checking requires an internet connection
 

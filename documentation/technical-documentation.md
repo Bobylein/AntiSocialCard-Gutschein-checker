@@ -111,13 +111,18 @@ Uses CameraX with ML Kit Text Recognition:
 
 ### WebView Balance Check (BalanceCheckActivity)
 
-1. Load retailer's balance check URL
+1. Load retailer's balance check URL (with headers for ALDI)
 2. Wait for page load
-3. Inject JavaScript to fill form fields
-4. Submit form programmatically
-5. Monitor page changes
+3. Inject JavaScript to fill form fields automatically
+4. User manually solves CAPTCHA and submits form (for ALDI)
+5. Monitor page changes to detect form submission
 6. Extract balance using JavaScript or HTML parsing
 7. Display result to user
+
+**ALDI-specific implementation:**
+- Loads iframe URL directly with referrer header to prevent blank page
+- Uses enhanced field selectors with table structure fallback
+- Detects form submission via iframe navigation monitoring
 
 ### JavaScript Injection
 
@@ -146,10 +151,14 @@ var balancePatterns = [
 
 ### ALDI Nord (AldiMarket)
 
-- **URL**: `https://www.helaba.com/de/aldi/`
-- **Fields**: Gutschein (19-digit), PIN (4-digit), CAPTCHA
+- **URL**: `https://balancechecks.tx-gate.com/balance.php?cid=59` (direct iframe URL)
+- **Fields**: Gutschein (20-digit), PIN (4-digit), CAPTCHA
 - **Brand Color**: #00529B (Blue)
-- **Note**: Requires manual CAPTCHA solving
+- **Implementation**: 
+  - Navigates directly to iframe URL with referrer header to prevent blank page
+  - Auto-fills card number and PIN fields using enhanced selectors
+  - User manually solves CAPTCHA and submits form
+  - Form submission detection extracts balance from result page
 
 ## Error Handling
 
