@@ -150,14 +150,29 @@ class ScannerActivity : AppCompatActivity() {
     }
 
     private fun onBarcodeDetected(barcode: String) {
-        if (detectedBarcode == barcode) return // Already showing this barcode
+        // Extract only the last 20 digits (gift card numbers are typically 19-20 digits)
+        val processedBarcode = extractLast20Digits(barcode)
+        
+        if (detectedBarcode == processedBarcode) return // Already showing this barcode
 
-        detectedBarcode = barcode
-        binding.tvDetectedBarcode.text = barcode
+        detectedBarcode = processedBarcode
+        binding.tvDetectedBarcode.text = processedBarcode
         binding.cardDetected.visibility = View.VISIBLE
+        
+        Log.d(TAG, "Original barcode: $barcode -> Processed: $processedBarcode")
 
         // Vibrate to give feedback
         // Note: Vibration requires VIBRATE permission
+    }
+    
+    private fun extractLast20Digits(barcode: String): String {
+        // Remove any non-digit characters and take the last 20 digits
+        val digitsOnly = barcode.filter { it.isDigit() }
+        return if (digitsOnly.length > 20) {
+            digitsOnly.takeLast(20)
+        } else {
+            digitsOnly
+        }
     }
 
     private fun navigateToPinEntry(barcode: String?) {
