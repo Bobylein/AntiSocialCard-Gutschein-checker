@@ -32,6 +32,13 @@ abstract class Market {
     abstract val brandColor: Int
     
     /**
+     * Whether this market requires manual form entry.
+     * Some markets use cross-origin iframes which prevent JavaScript injection.
+     * Default is false (automatic form filling).
+     */
+    open val requiresManualEntry: Boolean = false
+    
+    /**
      * Returns the JavaScript code to fill in the form fields on the balance check page.
      * This will be injected into the WebView after the page loads.
      * 

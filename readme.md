@@ -12,10 +12,12 @@ An Android application for checking gift card balances by scanning barcodes and 
 
 ## Supported Markets
 
-| Market | Website | Card Format |
-|--------|---------|-------------|
-| REWE | kartenwelt.rewe.de | Variable length barcode, PIN |
-| ALDI Nord | helaba.com/de/aldi | 19-digit number, 4-digit PIN |
+| Market | Website | Card Format | Mode |
+|--------|---------|-------------|------|
+| REWE | kartenwelt.rewe.de | Variable length barcode, PIN | Automatic |
+| ALDI Nord | helaba.com/de/aldi | 19-digit number, 4-digit PIN | Manual* |
+
+*ALDI uses a cross-origin iframe for the balance check form, requiring manual entry of card details.
 
 ## Requirements
 

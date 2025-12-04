@@ -52,7 +52,32 @@ class BalanceCheckActivity : AppCompatActivity() {
 
         setupUI()
         setupWebView()
+        
+        // Check if market requires manual entry
+        if (market.requiresManualEntry) {
+            showManualEntryMode()
+        }
+        
         loadBalanceCheckPage()
+    }
+    
+    private fun showManualEntryMode() {
+        // For markets with cross-origin iframes, show the card details for manual entry
+        binding.tvCaptchaInstruction.text = 
+            "Bitte geben Sie die Daten manuell ein:\n\n" +
+            "Gutscheinnummer: ${giftCard.cardNumber}\n" +
+            "PIN: ${giftCard.pin}\n\n" +
+            "Dann lösen Sie das CAPTCHA und klicken Sie auf 'Guthabenabfrage'."
+        binding.tvCaptchaInstruction.visibility = View.VISIBLE
+        binding.buttonsLayout.visibility = View.VISIBLE
+        binding.btnScanAnother.text = "Fertig"
+        binding.btnScanAnother.setOnClickListener {
+            finish()
+        }
+        
+        // Show WebView immediately for manual entry
+        showLoading(false)
+        binding.webView.visibility = View.VISIBLE
     }
 
     private fun setupUI() {
@@ -142,6 +167,13 @@ class BalanceCheckActivity : AppCompatActivity() {
 
     private fun fillFormFields() {
         if (formFilled) return
+        
+        // Skip automatic form filling for markets that require manual entry
+        if (market.requiresManualEntry) {
+            Log.d(TAG, "Market requires manual entry, skipping form fill")
+            formFilled = true
+            return
+        }
         
         Log.d(TAG, "Filling form fields...")
         val script = market.getFormFillScript(giftCard)

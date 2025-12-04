@@ -10,12 +10,16 @@ import java.util.regex.Pattern
  * Market implementation for ALDI Nord gift card balance checking.
  * Uses the Helaba bank service for ALDI gift card balance inquiries.
  * 
- * Form fields:
+ * IMPORTANT: The balance check form is loaded in an iframe from tx-gate.com,
+ * which prevents automatic JavaScript injection due to cross-origin restrictions.
+ * The user must manually enter the card details in the WebView form.
+ * 
+ * Form fields (visible in the iframe):
  * - Gutschein: 19-digit voucher number (format: 0000 0000 0000 0000 0000)
  * - PIN: 4-digit PIN
- * - Lösung: CAPTCHA solution (requires manual user input)
+ * - Lösung: CAPTCHA solution
  * 
- * Note: This page includes a CAPTCHA that the user must solve manually.
+ * Note: This market requires manual user interaction due to iframe cross-origin restrictions.
  */
 class AldiMarket : Market() {
     
@@ -24,9 +28,13 @@ class AldiMarket : Market() {
     override val displayName: String = "ALDI Nord"
     
     // Official ALDI Nord gift card balance check URL provided by Helaba
+    // The actual form is in an iframe from balancechecks.tx-gate.com
     override val balanceCheckUrl: String = "https://www.helaba.com/de/aldi/"
     
     override val brandColor: Int = Color.parseColor("#00529B") // ALDI Blue
+    
+    // ALDI requires manual form entry due to cross-origin iframe
+    override val requiresManualEntry: Boolean = true
     
     /**
      * JavaScript to fill in the Gutschein (voucher number) and PIN fields.

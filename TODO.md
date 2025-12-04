@@ -23,7 +23,8 @@
 
 ## Known Issues
 
-- [ ] **ALDI CAPTCHA** - ALDI balance check requires manual CAPTCHA solving
+- [ ] **ALDI cross-origin iframe** - ALDI uses a cross-origin iframe (tx-gate.com) for the balance check form, preventing automatic form filling. Users must enter card details manually.
+- [ ] **ALDI CAPTCHA** - ALDI balance check also requires manual CAPTCHA solving
 - [ ] **Website changes** - JavaScript selectors may break if retailers update their websites
 - [ ] **OCR accuracy** - PIN OCR may not work well with unusual fonts or low-quality images
 
