@@ -26,11 +26,29 @@ AntiSocialCard-Checker is an Android application built with Kotlin that allows u
 - `com.google.mlkit:barcode-scanning:17.2.0`
 - `com.google.mlkit:text-recognition:16.0.0`
 
+### Dependency Injection
+- `com.google.dagger:hilt-android:2.48`
+- `com.google.dagger:hilt-compiler:2.48` (KSP)
+
 ### Async & Lifecycle
 - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3`
 - `androidx.lifecycle:lifecycle-runtime-ktx:2.7.0`
+- `androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0`
 
 ## Architecture
+
+### Dependency Injection (Hilt)
+
+The app uses Hilt for dependency injection, providing better testability and code organization:
+
+1. **Application Class**: `GiftCardCheckerApplication` annotated with `@HiltAndroidApp`
+2. **Modules**:
+   - `AppModule`: Provides application-level singletons (JsAssetLoader)
+   - `OcrModule`: Provides ML Kit instances (BarcodeScanner, TextRecognizer)
+3. **Benefits**:
+   - Centralized dependency management
+   - Easier testing with mock dependencies
+   - Better separation of concerns
 
 ### Activity Flow
 
@@ -252,12 +270,26 @@ var balancePatterns = [
 - Form fill: Up to 5 attempts with 1-second delay
 - Balance extraction: 5-second timeout before error
 
+## Utility Classes
+
+### IntentExtensions
+
+Provides version-compatible methods for deprecated Intent APIs:
+
+- `getParcelableExtraCompat<T>()`: Handles `getParcelableExtra()` deprecation
+- `getSerializableExtraCompat<T>()`: Handles `getSerializableExtra()` deprecation
+- `getParcelableArrayListExtraCompat<T>()`: Handles ArrayList variants
+- `getParcelableArrayExtraCompat<T>()`: Handles array variants
+
+These extensions automatically use the correct API based on Android version (API 33+ uses typed methods, older versions use deprecated methods with proper casting).
+
 ## Security Considerations
 
 - No card data stored locally
 - HTTPS enforced for WebView
 - Card numbers displayed masked (first/last 4 digits only)
 - ProGuard rules to keep sensitive classes
+- Release builds use ProGuard obfuscation and resource shrinking
 
 ## Testing
 
@@ -400,6 +432,31 @@ REWE gift cards require landscape card orientation to scan the barcode, but the 
   - Coordinate transformation accounts for letterboxing/pillarboxing
   - Scale factors calculated based on aspect ratio differences
   - Proper offset calculation for centered image display
+
+### v2.0 - Dependency Injection and Build Improvements
+
+**Hilt Integration:**
+- Added Hilt dependency injection framework for better code organization
+- Created `GiftCardCheckerApplication` with `@HiltAndroidApp` annotation
+- Implemented `AppModule` for application-level dependencies
+- Implemented `OcrModule` for ML Kit dependencies (BarcodeScanner, TextRecognizer)
+- Improved testability through dependency injection
+
+**Intent API Compatibility:**
+- Created `IntentExtensions` utility for handling deprecated Intent APIs
+- Provides version-compatible methods that work across all Android versions
+- Eliminates deprecation warnings while maintaining compatibility
+
+**Build Configuration:**
+- Added debug and release build variants with different configurations
+- Enabled ProGuard for release builds with resource shrinking
+- Added build config fields for conditional logging and debug features
+- Debug builds use `.debug` application ID suffix for side-by-side installation
+
+**ProGuard Rules:**
+- Comprehensive rules for Hilt dependency injection
+- Preserved ML Kit, WebView, and data model classes
+- Optimized release build size and obfuscation
 
 ## Future Improvements
 

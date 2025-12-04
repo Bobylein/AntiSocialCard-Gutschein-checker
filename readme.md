@@ -98,6 +98,26 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **2.0**:
+  - **Dependency Injection with Hilt**:
+    - Integrated Hilt dependency injection framework for better code organization
+    - Created `GiftCardCheckerApplication` with `@HiltAndroidApp` annotation
+    - Added `AppModule` for application-level dependencies (JsAssetLoader)
+    - Added `OcrModule` for ML Kit dependencies (BarcodeScanner, TextRecognizer)
+    - Improved testability and maintainability through dependency injection
+  - **Intent API Compatibility**:
+    - Added `IntentExtensions` utility for handling deprecated Intent APIs
+    - Provides version-compatible methods for `getParcelableExtra`, `getSerializableExtra`, etc.
+    - Ensures compatibility across all Android versions (API 24+)
+  - **Build Configuration Improvements**:
+    - Added debug and release build variants with different configurations
+    - Enabled ProGuard for release builds with resource shrinking
+    - Added build config fields for logging and debug overlay control
+    - Debug builds use `.debug` application ID suffix
+  - **ProGuard Rules**:
+    - Added comprehensive ProGuard rules for Hilt dependency injection
+    - Preserved ML Kit, WebView, and data model classes
+    - Optimized release build size and obfuscation
 - **1.9**:
   - **Fixed ALDI PIN Detection Box Positioning**:
     - Enhanced coordinate transformation in `updateHighlights()` function

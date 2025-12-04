@@ -13,6 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.webkit.*
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.antisocial.giftcardchecker.databinding.ActivityBalanceCheckBinding
@@ -22,6 +23,7 @@ import com.antisocial.giftcardchecker.model.BalanceResult
 import com.antisocial.giftcardchecker.model.BalanceStatus
 import com.antisocial.giftcardchecker.model.GiftCard
 import com.antisocial.giftcardchecker.utils.StateManager
+import com.antisocial.giftcardchecker.utils.getParcelableExtraCompat
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -50,12 +52,7 @@ class BalanceCheckActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Get gift card from intent
-        giftCard = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(GiftCard.EXTRA_GIFT_CARD, GiftCard::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(GiftCard.EXTRA_GIFT_CARD)
-        } ?: run {
+        giftCard = intent.getParcelableExtraCompat(GiftCard.EXTRA_GIFT_CARD) ?: run {
             Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -66,6 +63,7 @@ class BalanceCheckActivity : AppCompatActivity() {
 
         setupUI()
         setupWebView()
+        setupBackPressedHandler()
         observeState()
 
         // Check network connectivity before loading
@@ -76,6 +74,22 @@ class BalanceCheckActivity : AppCompatActivity() {
 
         // Always use auto-fill - manual entry is not acceptable
         loadBalanceCheckPage()
+    }
+
+    /**
+     * Sets up the back button handler to navigate WebView history.
+     */
+    private fun setupBackPressedHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (binding.webView.canGoBack()) {
+                    binding.webView.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
     }
 
     /**
@@ -1937,15 +1951,6 @@ class BalanceCheckActivity : AppCompatActivity() {
                 Log.d(TAG, "Fallback JavaScript click result: $result")
             }
         }, 200)
-    }
-
-    override fun onBackPressed() {
-        if (binding.webView.canGoBack()) {
-            binding.webView.goBack()
-        } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
     }
 
     override fun onDestroy() {
