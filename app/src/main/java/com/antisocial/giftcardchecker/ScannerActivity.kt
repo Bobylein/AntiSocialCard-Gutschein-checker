@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.view.Surface
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,12 +17,11 @@ import com.antisocial.giftcardchecker.databinding.ActivityScannerBinding
 import com.antisocial.giftcardchecker.model.GiftCard
 import com.antisocial.giftcardchecker.model.MarketType
 import com.google.mlkit.vision.barcode.BarcodeScanner
-import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Activity for scanning gift card barcodes using CameraX and ML Kit.
@@ -35,7 +35,7 @@ class ScannerActivity : AppCompatActivity() {
     
     private var marketType: MarketType = MarketType.REWE
     private var detectedBarcode: String? = null
-    private var isProcessing = false
+    private val isProcessing = AtomicBoolean(false)
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -65,24 +65,10 @@ class ScannerActivity : AppCompatActivity() {
     }
 
     private fun setupBarcodeScanner() {
-        // Configure barcode scanner to detect multiple formats
-        val options = BarcodeScannerOptions.Builder()
-            .setBarcodeFormats(
-                Barcode.FORMAT_EAN_13,
-                Barcode.FORMAT_EAN_8,
-                Barcode.FORMAT_CODE_128,
-                Barcode.FORMAT_CODE_39,
-                Barcode.FORMAT_CODE_93,
-                Barcode.FORMAT_CODABAR,
-                Barcode.FORMAT_ITF,
-                Barcode.FORMAT_UPC_A,
-                Barcode.FORMAT_UPC_E,
-                Barcode.FORMAT_QR_CODE,
-                Barcode.FORMAT_DATA_MATRIX
-            )
-            .build()
-
-        barcodeScanner = BarcodeScanning.getClient(options)
+        // Use default client which supports ALL barcode formats
+        // This is more reliable than specifying individual formats
+        barcodeScanner = BarcodeScanning.getClient()
+        Log.d(TAG, "Barcode scanner initialized with all formats")
     }
 
     private fun setupUI() {
@@ -130,6 +116,7 @@ class ScannerActivity : AppCompatActivity() {
             // Image analysis use case for barcode scanning
             val imageAnalyzer = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setTargetRotation(binding.previewView.display?.rotation ?: Surface.ROTATION_0)
                 .build()
                 .also {
                     it.setAnalyzer(cameraExecutor, BarcodeAnalyzer { barcode ->
@@ -196,27 +183,37 @@ class ScannerActivity : AppCompatActivity() {
 
         @androidx.camera.core.ExperimentalGetImage
         override fun analyze(imageProxy: ImageProxy) {
-            if (isProcessing) {
+            // Use compareAndSet for thread-safe processing flag
+            if (!isProcessing.compareAndSet(false, true)) {
                 imageProxy.close()
                 return
             }
 
             val mediaImage = imageProxy.image
             if (mediaImage != null) {
-                isProcessing = true
+                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                Log.d(TAG, "Analyzing image with rotation: $rotationDegrees")
 
                 val image = InputImage.fromMediaImage(
                     mediaImage,
-                    imageProxy.imageInfo.rotationDegrees
+                    rotationDegrees
                 )
 
                 barcodeScanner.process(image)
                     .addOnSuccessListener { barcodes ->
+                        Log.d(TAG, "Found ${barcodes.size} barcodes")
                         for (barcode in barcodes) {
-                            barcode.rawValue?.let { value ->
-                                if (isValidBarcode(value)) {
-                                    onBarcodeDetected(value)
+                            val format = barcode.format
+                            val value = barcode.rawValue
+                            Log.d(TAG, "Barcode detected: format=$format, value=$value")
+                            
+                            value?.let {
+                                if (isValidBarcode(it)) {
+                                    Log.d(TAG, "Valid barcode: $it")
+                                    onBarcodeDetected(it)
                                     return@addOnSuccessListener
+                                } else {
+                                    Log.d(TAG, "Invalid barcode filtered: $it")
                                 }
                             }
                         }
@@ -225,19 +222,22 @@ class ScannerActivity : AppCompatActivity() {
                         Log.e(TAG, "Barcode scanning failed", e)
                     }
                     .addOnCompleteListener {
-                        isProcessing = false
+                        isProcessing.set(false)
                         imageProxy.close()
                     }
             } else {
+                Log.w(TAG, "Media image is null")
+                isProcessing.set(false)
                 imageProxy.close()
             }
         }
 
         private fun isValidBarcode(value: String): Boolean {
-            // Filter out obviously invalid barcodes
-            // Gift cards typically have numeric barcodes of reasonable length
-            return value.length in 8..25 && 
-                   (value.all { it.isDigit() } || value.all { it.isLetterOrDigit() })
+            // Accept any non-empty barcode - ML Kit already validates formats
+            // Gift cards can have various formats
+            val isValid = value.isNotEmpty() && value.length >= 4
+            Log.d(TAG, "isValidBarcode($value) = $isValid")
+            return isValid
         }
     }
 

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.view.Surface
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -158,16 +159,22 @@ class PinEntryActivity : AppCompatActivity() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
 
+            // Get current display rotation
+            val rotation = binding.ocrPreviewView.display?.rotation ?: Surface.ROTATION_0
+            Log.d(TAG, "Display rotation: $rotation")
+
             // Preview use case
             val preview = Preview.Builder()
+                .setTargetRotation(rotation)
                 .build()
                 .also {
                     it.setSurfaceProvider(binding.ocrPreviewView.surfaceProvider)
                 }
 
-            // Image capture use case
+            // Image capture use case - IMPORTANT: Set target rotation for correct image orientation
             imageCapture = ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setTargetRotation(rotation)
                 .build()
 
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -180,6 +187,7 @@ class PinEntryActivity : AppCompatActivity() {
                     preview,
                     imageCapture
                 )
+                Log.d(TAG, "Camera bound successfully with rotation: $rotation")
             } catch (e: Exception) {
                 Log.e(TAG, "Camera binding failed", e)
                 Toast.makeText(this, R.string.error_camera, Toast.LENGTH_SHORT).show()
@@ -208,10 +216,16 @@ class PinEntryActivity : AppCompatActivity() {
     private fun captureAndRecognize() {
         val imageCapture = imageCapture ?: return
 
+        // Update target rotation before capture in case device was rotated
+        val rotation = binding.ocrPreviewView.display?.rotation ?: Surface.ROTATION_0
+        imageCapture.targetRotation = rotation
+        Log.d(TAG, "Capturing image with rotation: $rotation")
+
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                    Log.d(TAG, "Image captured successfully, rotation degrees: ${imageProxy.imageInfo.rotationDegrees}")
                     processImageForText(imageProxy)
                 }
 
@@ -231,25 +245,38 @@ class PinEntryActivity : AppCompatActivity() {
     private fun processImageForText(imageProxy: ImageProxy) {
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
+            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+            Log.d(TAG, "Processing image for text, rotation: $rotationDegrees")
+            
             val image = InputImage.fromMediaImage(
                 mediaImage,
-                imageProxy.imageInfo.rotationDegrees
+                rotationDegrees
             )
 
             textRecognizer.process(image)
                 .addOnSuccessListener { visionText ->
                     val recognizedText = visionText.text
+                    Log.d(TAG, "Recognized text: $recognizedText")
+                    Log.d(TAG, "Text blocks: ${visionText.textBlocks.size}")
+                    
+                    // Log each text block for debugging
+                    visionText.textBlocks.forEachIndexed { index, block ->
+                        Log.d(TAG, "Block $index: '${block.text}'")
+                    }
+                    
                     val potentialPin = extractPotentialPin(recognizedText)
                     
                     if (potentialPin != null) {
+                        Log.d(TAG, "Found potential PIN: $potentialPin")
                         detectedPinText = potentialPin
                         binding.tvOcrResult.text = potentialPin
                         binding.cardOcrResult.visibility = View.VISIBLE
                     } else {
+                        Log.d(TAG, "No PIN found in recognized text")
                         Toast.makeText(
                             this,
-                            "No PIN detected. Try again.",
-                            Toast.LENGTH_SHORT
+                            "No PIN detected. Try again. (Found: ${recognizedText.take(50)}...)",
+                            Toast.LENGTH_LONG
                         ).show()
                     }
                 }
@@ -261,6 +288,7 @@ class PinEntryActivity : AppCompatActivity() {
                     imageProxy.close()
                 }
         } else {
+            Log.w(TAG, "Media image is null")
             imageProxy.close()
         }
     }
