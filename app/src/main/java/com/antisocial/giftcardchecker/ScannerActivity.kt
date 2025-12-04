@@ -895,30 +895,36 @@ class ScannerActivity : AppCompatActivity() {
                                 Log.d(TAG, "Search region: left=$pinRegionLeft, top=$pinRegionTop, right=$pinRegionRight, bottom=$pinRegionBottom")
                             }
                             ReweCardType.TYPE_2 -> {
-                                // TYPE_2: Aztec barcode - PIN location same as TYPE_1 (in separate field to the LEFT)
-                                // Apply same rotation-aware logic
+                                // TYPE_2: Aztec barcode - PIN location is in separate field to the LEFT
+                                // Apply same rotation-aware logic, but with a gap of 2x pin area height
                                 val barcodeWidth = barcodeBox.width()
                                 val barcodeHeight = barcodeBox.height()
                                 val isPortraitMode = rotationDegrees == 90 || rotationDegrees == 270
                                 
+                                // Gap between barcode and PIN area = 2 times the PIN area height
+                                val gapSize = (regionHeight * 2f).toInt()
+                                
                                 if (isPortraitMode) {
                                     // PIN is ABOVE barcode in ML Kit coords (portrait phone, landscape card)
-                                    val searchHeight = (barcodeHeight * 2).coerceAtMost(barcodeBox.top)
+                                    // Add gap of 1.5x pin area height between barcode and PIN search region
+                                    val searchHeight = (barcodeHeight * 2).coerceAtMost((barcodeBox.top - gapSize).coerceAtLeast(0))
                                     pinRegionLeft = (barcodeBox.left - barcodeWidth / 2).coerceAtLeast(0)
-                                    pinRegionTop = (barcodeBox.top - searchHeight).coerceAtLeast(0)
+                                    pinRegionBottom = (barcodeBox.top - gapSize).coerceAtLeast(0)
+                                    pinRegionTop = (pinRegionBottom - searchHeight).coerceAtLeast(0)
                                     pinRegionRight = (barcodeBox.right + barcodeWidth / 2).coerceAtMost(imageWidth)
-                                    pinRegionBottom = barcodeBox.top
                                     
-                                    Log.d(TAG, "REWE TYPE_2 (portrait mode): Aztec barcode - PIN search ABOVE barcode")
+                                    Log.d(TAG, "REWE TYPE_2 (portrait mode): Aztec barcode - PIN search ABOVE barcode with gap=$gapSize")
                                 } else {
                                     // PIN is to the LEFT of barcode in ML Kit coords
-                                    val searchWidth = (barcodeWidth * 2).coerceAtMost(barcodeBox.left)
-                                    pinRegionLeft = (barcodeBox.left - searchWidth).coerceAtLeast(0)
+                                    // Add gap of 2x pin area width between barcode and PIN search region
+                                    val gapWidth = (regionWidth * 2f).toInt()
+                                    val searchWidth = (barcodeWidth * 2).coerceAtMost((barcodeBox.left - gapWidth).coerceAtLeast(0))
+                                    pinRegionRight = (barcodeBox.left - gapWidth).coerceAtLeast(0)
+                                    pinRegionLeft = (pinRegionRight - searchWidth).coerceAtLeast(0)
                                     pinRegionTop = (barcodeBox.top - barcodeHeight / 2).coerceAtLeast(0)
-                                    pinRegionRight = barcodeBox.left
                                     pinRegionBottom = (barcodeBox.bottom + barcodeHeight / 2).coerceAtMost(imageHeight)
                                     
-                                    Log.d(TAG, "REWE TYPE_2 (landscape mode): Aztec barcode - PIN search LEFT of barcode")
+                                    Log.d(TAG, "REWE TYPE_2 (landscape mode): Aztec barcode - PIN search LEFT of barcode with gap=$gapWidth")
                                 }
                             }
                         }
@@ -946,8 +952,24 @@ class ScannerActivity : AppCompatActivity() {
                             }
                         }
                     }
+                    MarketType.ALDI -> {
+                        // ALDI: PIN is in the upper-right corner area of the card
+                        // Position search area towards the corner with less overlap, similar to Lidl
+                        val extendedWidth = (regionWidth * 2).coerceAtMost(imageWidth / 2)
+                        val extendedHeight = (regionHeight * 2).coerceAtMost(imageHeight / 2)
+                        
+                        // Position region towards the upper-right corner, extending further right
+                        // and upward with minimal overlap on the barcode
+                        pinRegionLeft = barcodeBox.right  // Start from right edge of barcode (no overlap)
+                        pinRegionTop = (barcodeBox.top - extendedHeight).coerceAtLeast(0)
+                        pinRegionRight = (barcodeBox.right + extendedWidth).coerceAtMost(imageWidth)
+                        pinRegionBottom = barcodeBox.top  // End at barcode top (no vertical overlap)
+                        
+                        Log.d(TAG, "ALDI: PIN search in upper-right corner (no overlap with barcode)")
+                        Log.d(TAG, "Extended search region: width=$extendedWidth, height=$extendedHeight")
+                    }
                     else -> {
-                        // For other cards (ALDI, etc.): PIN is typically in the upper-right corner
+                        // For other cards: PIN is typically in the upper-right corner
                         // Upper-right corner: start from right edge of barcode, go left
                         pinRegionLeft = barcodeBox.right - regionWidth
                         pinRegionTop = barcodeBox.top

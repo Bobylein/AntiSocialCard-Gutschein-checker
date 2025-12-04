@@ -133,9 +133,12 @@ Uses rotation-aware region-of-interest (ROI) detection for improved accuracy:
 2. **Rotation Detection**: Determines phone orientation from `imageProxy.imageInfo.rotationDegrees`
 3. **PIN Region Calculation** (rotation-aware):
    - For **REWE cards**: PIN is physically to the LEFT of barcode on the card
+     - **TYPE_1**: Standard positioning adjacent to barcode
+     - **TYPE_2** (Aztec): Gap of 2x PIN area height between barcode and PIN search region
    - In **portrait mode** (90°/270° rotation): "left of barcode" maps to ABOVE barcode in ML Kit coords
    - In **landscape mode** (0°/180° rotation): "left of barcode" maps to left of barcode in ML Kit coords
    - For **LIDL cards**: PIN is in upper-right corner, calculated relative to barcode position
+   - For **ALDI cards**: PIN is in upper-right corner, positioned towards corners with no barcode overlap
 4. **Coordinate Transformation**: 
    - ML Kit provides coordinates in display-corrected space (rotation applied)
    - Native bitmap from camera is in sensor orientation (not rotated)
@@ -216,6 +219,11 @@ var balancePatterns = [
 - **URL**: `https://balancechecks.tx-gate.com/balance.php?cid=59` (direct iframe URL)
 - **Fields**: Gutschein (20-digit), PIN (4-digit), CAPTCHA
 - **Brand Color**: #00529B (Blue)
+- **PIN Detection**: 
+  - PIN search area positioned towards upper-right corner of card
+  - Uses extended width/height (2x region size) similar to Lidl
+  - No overlap with barcode area - starts from barcode right edge, ends at barcode top
+  - Corner-focused detection for improved accuracy
 - **Implementation**: 
   - Navigates directly to iframe URL with referrer header to prevent blank page
   - Auto-fills card number and PIN fields using enhanced selectors
@@ -346,6 +354,18 @@ REWE gift cards require landscape card orientation to scan the barcode, but the 
   - Hides long error messages displayed in DOM for Lidl pages
   - Uses MutationObserver to catch dynamically added error elements
   - Detects and hides elements with error-like text (>500 chars)
+
+### v1.6 - PIN Detection Region Improvements
+- **REWE TYPE_2 Gap Enhancement**:
+  - Added 2x PIN area gap between barcode and PIN search region for Aztec barcodes
+  - In portrait mode: gap applied vertically (between barcode top and PIN region bottom)
+  - In landscape mode: gap applied horizontally (between barcode left and PIN region right)
+  - Improves PIN detection accuracy by avoiding barcode interference
+- **ALDI Corner-Focused Detection**:
+  - Dedicated ALDI case with Lidl-style corner positioning
+  - Extended search region (2x width and height)
+  - No overlap with barcode area - PIN region starts from barcode right edge and ends at barcode top
+  - Improved PIN detection by focusing on actual corner location
 
 ## Future Improvements
 
