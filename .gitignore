@@ -1,3 +1,5 @@
+captcha_models/
+
 # Built application files
 *.apk
 *.aar
@@ -99,4 +101,14 @@ Thumbs.db
 
 # Cursor
 .cursor/
+
+# Python virtual environment
+venv/
+env/
+ENV/
+
+# Python test models
+models/
+captcha_models/
+*.onnx
 

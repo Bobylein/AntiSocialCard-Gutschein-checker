@@ -4,7 +4,15 @@ An Android application for checking gift card balances by scanning barcodes and 
 
 ## Features
 
-- **Barcode Scanning**: Use ML Kit to scan gift card barcodes with the camera
+- **Enhanced Barcode Scanning**: 
+  - High-resolution scanning (1920x1080) for better distance detection
+  - Auto-focus and continuous focus mode for sharp images
+  - Visual highlighting of detected barcodes and PINs
+  - Pinch-to-zoom support for manual adjustment
+  - User confirmation required before proceeding
+- **Smart PIN Detection**: 
+  - Region-of-interest detection focusing on upper-right corner of barcode
+  - Improved OCR accuracy by cropping to PIN region
 - **OCR PIN Capture**: Optionally scan the PIN using OCR, or enter it manually
 - **WebView Balance Check**: Automatically fill and submit balance check forms
 - **Multi-Market Support**: Modular architecture for easy addition of new retailers
@@ -86,6 +94,15 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.3**: 
+  - Enhanced barcode scanning distance (2-3x improvement)
+  - High-resolution image analysis (1920x1080) for better detection
+  - Continuous autofocus and optimized camera settings
+  - Visual highlighting of detected barcodes (green) and PINs (blue)
+  - Region-of-interest PIN detection in upper-right corner of barcode
+  - Pinch-to-zoom support for manual distance adjustment
+  - User confirmation required before navigation (no auto-navigate)
+  - Improved coordinate conversion for accurate highlight positioning
 - **1.2**: 
   - Implemented native Android touch simulation for CAPTCHA field focus
   - Uses MotionEvent to simulate touch at CAPTCHA coordinates for reliable keyboard opening

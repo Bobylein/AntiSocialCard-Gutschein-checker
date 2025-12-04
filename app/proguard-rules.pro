@@ -14,3 +14,4 @@
 # Keep data classes
 -keep class com.antisocial.giftcardchecker.model.** { *; }
 
+
