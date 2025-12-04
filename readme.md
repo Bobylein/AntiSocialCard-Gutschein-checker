@@ -98,6 +98,11 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **2.2**:
+  - **ALDI PIN Detection Position Fix**:
+    - Changed ALDI PIN detection region from upper-right to upper-left corner
+    - PIN search region now positioned to the left of barcode (mirrored from Lidl's upper-right positioning)
+    - Improved PIN detection accuracy for ALDI cards by scanning correct corner location
 - **2.1**:
   - **German Localization**:
     - Translated all user-facing text to German

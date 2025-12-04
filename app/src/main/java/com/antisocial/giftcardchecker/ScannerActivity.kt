@@ -974,19 +974,20 @@ class ScannerActivity : AppCompatActivity() {
                         }
                     }
                     MarketType.ALDI -> {
-                        // ALDI: PIN is in the upper-right corner area of the card
-                        // Position search area towards the corner with less overlap, similar to Lidl
-                        val extendedWidth = (regionWidth * 2).coerceAtMost(imageWidth / 2)
-                        val extendedHeight = (regionHeight * 2).coerceAtMost(imageHeight / 2)
+                        // ALDI: PIN is in a separate field to the UPPER-LEFT of the barcode
+                        // The PIN field is typically a distinct rectangular area above and to the left of barcode
+                        // Use a larger region to cover the separate PIN field area, similar to Lidl but mirrored
+                        val extendedWidth = (regionWidth * 2).toInt().coerceAtMost(imageWidth / 2)
+                        val extendedHeight = (regionHeight * 2).toInt().coerceAtMost(imageHeight / 2)
                         
-                        // Position region towards the upper-right corner, extending further right
-                        // and upward with minimal overlap on the barcode
-                        pinRegionLeft = barcodeBox.right  // Start from right edge of barcode (no overlap)
+                        // Position region starting from barcode's upper-left corner, extending upward and leftward
+                        // Mirror of Lidl's upper-right positioning: centered around left edge, extending leftward
+                        pinRegionLeft = (barcodeBox.left - extendedWidth).coerceAtLeast(0)
                         pinRegionTop = (barcodeBox.top - extendedHeight).coerceAtLeast(0)
-                        pinRegionRight = (barcodeBox.right + extendedWidth).coerceAtMost(imageWidth)
-                        pinRegionBottom = barcodeBox.top  // End at barcode top (no vertical overlap)
+                        pinRegionRight = barcodeBox.left  // End at left edge of barcode
+                        pinRegionBottom = barcodeBox.top + (extendedHeight / 2)
                         
-                        Log.d(TAG, "ALDI: PIN search in upper-right corner (no overlap with barcode)")
+                        Log.d(TAG, "ALDI: PIN in separate field to the UPPER-LEFT of barcode")
                         Log.d(TAG, "Extended search region: width=$extendedWidth, height=$extendedHeight")
                     }
                     else -> {
