@@ -86,6 +86,11 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **1.2**: 
+  - Implemented native Android touch simulation for CAPTCHA field focus
+  - Uses MotionEvent to simulate touch at CAPTCHA coordinates for reliable keyboard opening
+  - Added JavaScript interface for coordinate-based touch simulation
+  - Improved keyboard opening reliability on mobile devices
 - **1.1**: 
   - Added ALDI page preloading to reduce blank page issues
   - Improved CAPTCHA field focus with retry mechanism and keyboard opening

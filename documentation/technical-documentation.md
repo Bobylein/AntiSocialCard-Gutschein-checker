@@ -131,10 +131,13 @@ Uses CameraX with ML Kit Text Recognition:
 - Uses enhanced field selectors with table structure fallback
 - Detects form submission via iframe navigation monitoring
 - **Page preloading**: Hidden WebView in MainActivity preloads ALDI page when user clicks ALDI card
-- **CAPTCHA focus**: Multi-attempt focus mechanism with retry logic to ensure keyboard opens
-  - JavaScript-side: Up to 5 retry attempts with field readiness checks
-  - Android-side: Backup focus method called after form fill
-  - Handles both direct form and iframe scenarios
+- **CAPTCHA focus**: Native Android touch simulation for reliable keyboard opening
+  - JavaScript calculates CAPTCHA field coordinates using getBoundingClientRect()
+  - Calls Android.simulateTouch(x, y) via JavaScript interface
+  - Android simulates native MotionEvent touch at calculated coordinates
+  - More reliable than JavaScript focus() for opening keyboard on WebView
+  - Includes fallback JavaScript click method if touch simulation fails
+  - Handles both direct form and iframe scenarios with proper coordinate calculation
 
 ### JavaScript Injection
 
@@ -207,8 +210,16 @@ var balancePatterns = [
 6. Error state handling
 7. Network error recovery
 
-## Recent Improvements (v1.1)
+## Recent Improvements
 
+### v1.2 - Native Touch Simulation for CAPTCHA Focus
+- **Native Android Touch Events**: Uses MotionEvent.obtain() to simulate touch at CAPTCHA coordinates
+- **Coordinate-Based Approach**: JavaScript calculates field center coordinates, Android simulates touch
+- **JavaScript Interface**: Added simulateTouch() method to WebAppInterface for coordinate-based touch
+- **Reliable Keyboard Opening**: Native touch simulation is more reliable than JavaScript focus() on WebView
+- **Fallback Mechanism**: Includes JavaScript click fallback if touch simulation fails
+
+### v1.1 - Page Preloading and Enhanced Focus
 - **ALDI Page Preloading**: Hidden WebView preloads ALDI page when user selects ALDI market
 - **CAPTCHA Focus Enhancement**: 
   - Multi-attempt focus with retry mechanism (up to 5 attempts)
@@ -216,7 +227,6 @@ var balancePatterns = [
   - Scroll into view before focusing
   - Multiple event dispatching (focus, click, mouse events)
   - Android-side backup focus method
-  - Improved keyboard opening reliability on mobile devices
 
 ## Future Improvements
 
