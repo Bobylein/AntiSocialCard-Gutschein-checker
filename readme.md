@@ -98,6 +98,18 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **2.5**:
+  - **Enhanced Scanner UI with Card Overlay**:
+    - Added vertical card cutout overlay showing where to position the gift card
+    - Dynamic overlay sizing that fits within display bounds while maintaining 5:8 aspect ratio
+    - "PIN hier oben" instruction text with downward-pointing arrow
+    - Arrow positioned independently and aligned with expected PIN location (left for REWE, right for ALDI/Lidl)
+    - Market-specific horizontal alignment for PIN instruction and arrow
+    - Footer with fixed height (25% of screen) that doesn't change with content
+    - Side-by-side buttons: "Manuelle Eingabe" (left, smaller) and "Daten überprüfen" (right, larger)
+    - Both buttons now have the same height for consistent appearance
+    - Footer extends to screen edges with no side margins
+    - Automatic font size adjustment if content doesn't fit
 - **2.4**:
   - **Fixed Live Visualization of PIN Search Regions**:
     - Completely rewrote coordinate transformation system for overlay positioning

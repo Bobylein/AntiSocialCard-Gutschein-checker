@@ -133,6 +133,12 @@ Uses CameraX with ML Kit Barcode Scanner with enhanced distance scanning:
 4. **Visual Feedback**:
    - RED highlight overlay shows expected barcode search region
    - BLUE highlight overlay shows expected PIN search region
+   - Vertical card cutout overlay frame showing where to position the gift card
+   - Dynamic overlay sizing that fits within display bounds (80% width/height with 10% margins) while maintaining 5:8 aspect ratio
+   - Programmatic sizing ensures overlay fits within display bounds on all devices
+   - "PIN hier oben" instruction text with downward-pointing arrow positioned above card overlay
+   - Market-specific horizontal alignment: REWE (left, bias 0.2), ALDI/Lidl (right, bias 0.6)
+   - Arrow positioned independently and aligned with expected PIN location
    - Coordinate conversion from ML Kit coordinate system to preview view coordinates
    - Accounts for display rotation, aspect ratio differences, and letterboxing/pillarboxing
    - Highlights positioned relative to preview view using accurate transformation
@@ -141,6 +147,11 @@ Uses CameraX with ML Kit Barcode Scanner with enhanced distance scanning:
 
 5. **User Interaction**:
    - Pinch-to-zoom gesture support
+   - Fixed-height footer (25% of screen) with side-by-side buttons
+   - "Manuelle Eingabe" button (left, smaller) and "Daten überprüfen" button (right, larger)
+   - Both buttons have same height for consistent appearance
+   - Footer extends to screen edges with no side margins
+   - Automatic font size adjustment if footer content doesn't fit
    - User must confirm detection before navigation
    - Manual entry option always available
 

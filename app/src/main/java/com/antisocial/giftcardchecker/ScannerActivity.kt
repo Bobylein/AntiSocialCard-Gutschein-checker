@@ -110,6 +110,19 @@ class ScannerActivity : AppCompatActivity() {
         
         // Initialize zoom gesture handler
         setupZoomGestureHandler()
+        
+        // Setup card overlay sizing to fit within bounds
+        setupCardOverlaySizing()
+        
+        // Make card visible so buttons are always shown
+        binding.cardDetected.visibility = View.VISIBLE
+        binding.btnManualEntry.visibility = View.VISIBLE
+        
+        // Position PIN instruction based on market type
+        positionPinInstruction()
+        
+        // Setup footer content sizing to ensure all content fits
+        setupFooterContentSizing()
     }
 
     private fun setupBarcodeScanner() {
@@ -155,6 +168,145 @@ class ScannerActivity : AppCompatActivity() {
                 true
             } else {
                 false
+            }
+        }
+    }
+    
+    private fun setupCardOverlaySizing() {
+        // Wait for layout to be measured, then adjust card frame size to fit within bounds
+        binding.cardCutoutOverlay.post {
+            val overlay = binding.cardCutoutOverlay
+            val cardFrame = binding.cardCutoutFrame
+            
+            // Get available space (80% of overlay dimensions with 10% margins)
+            // The overlay is now constrained above the card, so it will automatically leave space
+            val availableWidth = overlay.width * 0.8f
+            val availableHeight = overlay.height * 0.7f  // Use 70% to be more conservative and leave room
+            
+            // Calculate size based on 5:8 aspect ratio (width:height)
+            // Try width-first approach
+            val widthFromWidth = availableWidth
+            val heightFromWidth = widthFromWidth * 8f / 5f
+            
+            // Try height-first approach
+            val heightFromHeight = availableHeight
+            val widthFromHeight = heightFromHeight * 5f / 8f
+            
+            // Use the approach that fits within both constraints
+            val finalWidth: Float
+            val finalHeight: Float
+            
+            if (heightFromWidth <= availableHeight) {
+                // Width constraint is limiting
+                finalWidth = widthFromWidth
+                finalHeight = heightFromWidth
+            } else {
+                // Height constraint is limiting
+                finalWidth = widthFromHeight
+                finalHeight = heightFromHeight
+            }
+            
+            // Update layout params to set explicit size and center it
+            val layoutParams = cardFrame.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            
+            // Clear old constraints
+            layoutParams.startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.startToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.endToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.topToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.bottomToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            
+            // Set new constraints to parent and center with bias
+            layoutParams.startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            layoutParams.endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            layoutParams.topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            layoutParams.bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            layoutParams.horizontalBias = 0.5f
+            layoutParams.verticalBias = 0.5f
+            
+            // Set explicit size
+            layoutParams.width = finalWidth.toInt()
+            layoutParams.height = finalHeight.toInt()
+            
+            // Clear margins to ensure proper centering
+            layoutParams.marginStart = 0
+            layoutParams.marginEnd = 0
+            layoutParams.topMargin = 0
+            layoutParams.bottomMargin = 0
+            
+            cardFrame.layoutParams = layoutParams
+            cardFrame.requestLayout()
+            
+            // Update PIN instruction position after card frame is sized
+            positionPinInstruction()
+        }
+    }
+    
+    private fun positionPinInstruction() {
+        // Position PIN instruction and arrow horizontally based on market type
+        // REWE: PIN is on the LEFT, ALDI/Lidl: PIN is on the RIGHT
+        binding.cardCutoutOverlay.post {
+            val pinText = binding.tvPinInstruction
+            val arrowView = binding.ivArrowDown
+            val textParams = pinText.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            val arrowParams = arrowView.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            
+            when (marketType) {
+                MarketType.REWE -> {
+                    // REWE: PIN is on the left side
+                    textParams.horizontalBias = 0.0f
+                    arrowParams.horizontalBias = 0.2f
+                }
+                MarketType.ALDI, MarketType.LIDL -> {
+                    // ALDI/Lidl: PIN is on the right side (upper-right)
+                    textParams.horizontalBias = 1.0f
+                    arrowParams.horizontalBias = 0.6f
+                }
+            }
+            
+            pinText.layoutParams = textParams
+            arrowView.layoutParams = arrowParams
+            pinText.requestLayout()
+            arrowView.requestLayout()
+        }
+    }
+    
+    private fun setupFooterContentSizing() {
+        // Ensure footer content fits by adjusting font sizes if necessary
+        binding.cardDetected.post {
+            val cardDetected = binding.cardDetected
+            val contentLayout = cardDetected.getChildAt(0) as? android.view.ViewGroup ?: return@post
+            
+            // Measure content height
+            contentLayout.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(cardDetected.width, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+            )
+            val contentHeight = contentLayout.measuredHeight
+            val availableHeight = cardDetected.height - (cardDetected.paddingTop + cardDetected.paddingBottom)
+            
+            // If content doesn't fit, reduce font sizes proportionally
+            if (contentHeight > availableHeight && availableHeight > 0) {
+                val scaleFactor = (availableHeight.toFloat() / contentHeight.toFloat()).coerceIn(0.7f, 1.0f)
+                adjustTextSizes(contentLayout, scaleFactor)
+            }
+        }
+    }
+    
+    private fun adjustTextSizes(parent: android.view.ViewGroup, scaleFactor: Float) {
+        for (i in 0 until parent.childCount) {
+            val child = parent.getChildAt(i)
+            when (child) {
+                is android.widget.TextView -> {
+                    val currentSize = child.textSize / resources.displayMetrics.scaledDensity
+                    child.textSize = currentSize * scaleFactor
+                }
+                is android.view.ViewGroup -> {
+                    adjustTextSizes(child, scaleFactor)
+                }
             }
         }
     }
@@ -369,14 +521,25 @@ class ScannerActivity : AppCompatActivity() {
     }
     
     private fun updateUI() {
+        // Card is always visible, but content visibility depends on detection
+        binding.cardDetected.visibility = View.VISIBLE
+        
         if (detectedBarcode != null) {
+            binding.tvDetectedLabel.visibility = View.VISIBLE
             binding.tvDetectedBarcode.text = getString(R.string.barcode_label, detectedBarcode)
-            binding.cardDetected.visibility = View.VISIBLE
+            binding.tvDetectedBarcode.visibility = View.VISIBLE
+            binding.btnUseBarcode.visibility = View.VISIBLE
+        } else {
+            binding.tvDetectedLabel.visibility = View.GONE
+            binding.tvDetectedBarcode.visibility = View.GONE
+            binding.btnUseBarcode.visibility = View.GONE
         }
         
         if (detectedPin != null) {
             binding.tvDetectedPin.text = getString(R.string.pin_label, detectedPin)
             binding.tvDetectedPin.visibility = View.VISIBLE
+        } else {
+            binding.tvDetectedPin.visibility = View.GONE
         }
         
         // Update button text if we have both
@@ -385,6 +548,12 @@ class ScannerActivity : AppCompatActivity() {
         } else if (detectedBarcode != null) {
             binding.btnUseBarcode.text = getString(R.string.verify_data)
         }
+        
+        // Manual entry button is always visible
+        binding.btnManualEntry.visibility = View.VISIBLE
+        
+        // Recalculate footer content sizing after visibility changes
+        setupFooterContentSizing()
     }
 
     /**

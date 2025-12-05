@@ -12,6 +12,7 @@
     <!-- Scanner Activity -->
     <string name="scanner_title">Barcode scannen</string>
     <string name="scanner_instruction">Kamera auf den Barcode Ihrer Geschenkkarte richten</string>
+    <string name="pin_here_above">PIN hier oben</string>
     <string name="scanner_permission_denied">Kamera-Berechtigung ist erforderlich, um Barcodes zu scannen</string>
     <string name="scanner_no_barcode">Kein Barcode erkannt</string>
     <string name="please_scan_barcode">Bitte scannen Sie den Barcode</string>

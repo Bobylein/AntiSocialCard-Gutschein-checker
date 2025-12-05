@@ -23,16 +23,20 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:background="@color/scanner_overlay"
-        android:orientation="vertical"
-        android:padding="@dimen/spacing_md"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/spacing_md"
+        android:paddingEnd="@dimen/spacing_md"
+        android:paddingTop="@dimen/spacing_xs"
+        android:paddingBottom="@dimen/spacing_xs"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <ImageButton
             android:id="@+id/btnBack"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center_vertical"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
             android:src="@android:drawable/ic_menu_close_clear_cancel"
@@ -40,9 +44,11 @@
 
         <TextView
             android:id="@+id/tvTitle"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/spacing_sm"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:layout_weight="1"
             android:text="@string/scanner_title"
             android:textColor="@color/on_primary"
             android:textSize="@dimen/text_headline"
@@ -50,45 +56,30 @@
 
     </LinearLayout>
 
-    <!-- Instruction text -->
-    <TextView
-        android:id="@+id/tvInstruction"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/spacing_lg"
-        android:layout_marginEnd="@dimen/spacing_lg"
-        android:gravity="center"
-        android:text="@string/scanner_instruction"
-        android:textColor="@color/on_primary"
-        android:textSize="@dimen/text_body"
-        android:background="#80000000"
-        android:padding="@dimen/spacing_sm"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/cardDetected"
-        app:layout_constraintVertical_bias="0.7" />
-
-    <!-- Detected barcode display -->
+    <!-- Detected barcode display merged with manual entry button -->
     <androidx.cardview.widget.CardView
         android:id="@+id/cardDetected"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/spacing_lg"
-        android:layout_marginEnd="@dimen/spacing_lg"
-        android:layout_marginBottom="@dimen/spacing_lg"
-        android:visibility="gone"
+        android:layout_height="0dp"
         app:cardBackgroundColor="@color/surface"
-        app:cardCornerRadius="@dimen/card_corner_radius"
+        app:cardCornerRadius="0dp"
         app:cardElevation="@dimen/card_elevation"
-        app:layout_constraintBottom_toTopOf="@id/btnManualEntry"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        app:layout_constraintHeight_percent="0.25"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/cardCutoutOverlay"
+        app:layout_constraintVertical_bias="1.0">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
             android:orientation="vertical"
-            android:padding="@dimen/spacing_md">
+            android:paddingStart="@dimen/spacing_md"
+            android:paddingEnd="@dimen/spacing_md"
+            android:paddingTop="@dimen/spacing_md"
+            android:paddingBottom="@dimen/spacing_md">
 
             <TextView
                 android:id="@+id/tvDetectedLabel"
@@ -96,7 +87,8 @@
                 android:layout_height="wrap_content"
                 android:text="Erkannt:"
                 android:textColor="@color/text_secondary"
-                android:textSize="@dimen/text_caption" />
+                android:textSize="@dimen/text_caption"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tvDetectedBarcode"
@@ -107,6 +99,7 @@
                 android:textColor="@color/on_surface"
                 android:textSize="@dimen/text_body"
                 android:textStyle="bold"
+                android:visibility="gone"
                 tools:text="Barcode: 1234567890123456789" />
 
             <TextView
@@ -121,35 +114,43 @@
                 android:visibility="gone"
                 tools:text="PIN: 1234" />
 
-            <Button
-                android:id="@+id/btnUseBarcode"
+            <!-- Buttons side by side -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/button_height"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/spacing_sm"
-                android:background="@drawable/button_primary"
-                android:text="Use this barcode"
-                android:textAllCaps="false"
-                android:textColor="@color/on_primary" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <Button
+                    android:id="@+id/btnManualEntry"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/button_height"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="@dimen/spacing_sm"
+                    android:background="@drawable/button_secondary"
+                    android:text="Manuell eingeben"
+                    android:textAllCaps="false"
+                    android:textColor="@color/secondary"
+                    android:textSize="12sp"
+                    android:visibility="visible" />
+
+                <Button
+                    android:id="@+id/btnUseBarcode"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/button_height"
+                    android:layout_weight="2"
+                    android:background="@drawable/button_primary"
+                    android:text="@string/verify_data"
+                    android:textAllCaps="false"
+                    android:textColor="@color/on_primary"
+                    android:visibility="gone" />
+
+            </LinearLayout>
 
         </LinearLayout>
 
     </androidx.cardview.widget.CardView>
-
-    <!-- Manual entry button -->
-    <Button
-        android:id="@+id/btnManualEntry"
-        android:layout_width="0dp"
-        android:layout_height="@dimen/button_height"
-        android:layout_marginStart="@dimen/spacing_lg"
-        android:layout_marginEnd="@dimen/spacing_lg"
-        android:layout_marginBottom="@dimen/spacing_xl"
-        android:background="@drawable/button_secondary"
-        android:text="Manuell eingeben"
-        android:textAllCaps="false"
-        android:textColor="@color/secondary"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
 
     <!-- Loading indicator -->
     <ProgressBar
@@ -214,6 +215,96 @@
         app:layout_constraintBottom_toTopOf="@id/cardDetected"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Card cutout overlay -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/cardCutoutOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:elevation="5dp"
+        app:layout_constraintBottom_toTopOf="@id/cardDetected"
+        app:layout_constraintEnd_toEndOf="@id/previewView"
+        app:layout_constraintStart_toStartOf="@id/previewView"
+        app:layout_constraintTop_toBottomOf="@id/header"
+        app:layout_constraintVertical_bias="0.0">
+
+        <!-- Guidelines for 10% margins -->
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guidelineLeft"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.1" />
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guidelineRight"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.9" />
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guidelineTop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_percent="0.1" />
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guidelineBottom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_percent="0.9" />
+
+        <!-- Card cutout frame (vertical) - 80% width and height with 10% margins -->
+        <!-- Size will be calculated programmatically to fit within bounds while maintaining 5:8 aspect ratio -->
+        <View
+            android:id="@+id/cardCutoutFrame"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:background="@drawable/card_cutout_overlay"
+            app:layout_constraintEnd_toStartOf="@id/guidelineRight"
+            app:layout_constraintStart_toEndOf="@id/guidelineLeft"
+            app:layout_constraintTop_toBottomOf="@id/guidelineTop"
+            app:layout_constraintBottom_toTopOf="@id/guidelineBottom"
+            app:layout_constraintDimensionRatio="W,5:8" />
+
+        <!-- PIN instruction text above card overlay border -->
+        <TextView
+            android:id="@+id/tvPinInstruction"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_sm"
+            android:background="@color/scanner_overlay"
+            android:paddingStart="@dimen/spacing_md"
+            android:paddingEnd="@dimen/spacing_md"
+            android:paddingTop="@dimen/spacing_sm"
+            android:paddingBottom="@dimen/spacing_sm"
+            android:text="@string/pin_here_above"
+            android:textColor="@color/on_primary"
+            android:textSize="@dimen/text_body"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toTopOf="@id/cardCutoutFrame"
+            app:layout_constraintEnd_toEndOf="@id/cardCutoutFrame"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="@id/cardCutoutFrame" />
+
+        <!-- Arrow pointing down, independently aligned with expected PIN position -->
+        <ImageView
+            android:id="@+id/ivArrowDown"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="@dimen/spacing_xs"
+            android:src="@drawable/ic_arrow_down"
+            android:tint="@color/on_primary"
+            android:contentDescription="Arrow pointing down"
+            app:layout_constraintEnd_toEndOf="@id/cardCutoutFrame"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="@id/cardCutoutFrame"
+            app:layout_constraintTop_toBottomOf="@id/tvPinInstruction" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
 
