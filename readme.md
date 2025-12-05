@@ -42,9 +42,31 @@ An Android application for checking gift card balances by scanning barcodes and 
 2. Sync Gradle files
 3. Build and run on a device or emulator
 
+### Debug APK
+
 ```bash
 ./gradlew assembleDebug
 ```
+
+The debug APK will be generated at: `app/build/outputs/apk/debug/app-debug.apk`
+
+### Release APK
+
+To build a release APK (non-debug), you need to:
+
+1. **Set up signing configuration** (if not already done):
+   - Copy `app/keystore.properties.template` to `app/keystore.properties`
+   - Fill in your keystore details in `app/keystore.properties`
+   - Ensure your keystore file exists (default: `app/release-key.jks`)
+
+2. **Build the release APK**:
+```bash
+./gradlew assembleRelease
+```
+
+The release APK will be generated at: `app/build/outputs/apk/release/app-release.apk`
+
+**Note**: The release APK is optimized with ProGuard and resource shrinking for smaller file size.
 
 ## Architecture
 
