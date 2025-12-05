@@ -406,40 +406,39 @@ class ScannerActivity : AppCompatActivity() {
         val imageHeight = imageAnalysisHeight
         val rotation = imageRotationDegrees
 
-        // Calculate how the image is displayed in the preview view
-        // PreviewView may scale and crop the image to fit
-        // Note: PreviewView automatically handles rotation, so we need to account for it
+        // PreviewView uses FILL_CENTER by default, which crops the image to fill the entire view
+        // This is different from FIT_CENTER which would letterbox the image
         val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
         val previewAspectRatio = previewWidth.toFloat() / previewHeight.toFloat()
-        
-        val scaleX: Float
-        val scaleY: Float
-        val offsetX: Int
-        val offsetY: Int
-        
-        // For portrait rotations (90°/270°), ML Kit swaps width/height
-        // But PreviewView displays in the same orientation as ML Kit coordinates
-        // So we can use the ML Kit dimensions directly
+
+        val scale: Float
+        val offsetX: Float
+        val offsetY: Float
+
+        // FILL_CENTER scaling logic:
+        // Scale to fill the entire preview, cropping parts that don't fit
         if (imageAspectRatio > previewAspectRatio) {
-            // Image is wider - fit to width, letterbox top/bottom
-            scaleX = previewWidth.toFloat() / imageWidth.toFloat()
-            scaleY = scaleX // Maintain aspect ratio
-            offsetX = 0
-            offsetY = ((previewHeight - imageHeight * scaleY) / 2).toInt()
+            // Image is wider - scale to fill height, crop left/right
+            // The image fills the preview height completely
+            scale = previewHeight.toFloat() / imageHeight.toFloat()
+            // Negative offset means the image extends beyond the preview on the left
+            offsetX = -(imageWidth * scale - previewWidth) / 2f
+            offsetY = 0f
         } else {
-            // Image is taller - fit to height, letterbox left/right
-            scaleY = previewHeight.toFloat() / imageHeight.toFloat()
-            scaleX = scaleY // Maintain aspect ratio
-            offsetX = ((previewWidth - imageWidth * scaleX) / 2).toInt()
-            offsetY = 0
+            // Image is taller - scale to fill width, crop top/bottom
+            // The image fills the preview width completely
+            scale = previewWidth.toFloat() / imageWidth.toFloat()
+            offsetX = 0f
+            // Negative offset means the image extends beyond the preview on the top
+            offsetY = -(imageHeight * scale - previewHeight) / 2f
         }
 
         // Transform function for a single region
         fun transformRegion(region: Rect): android.graphics.Rect {
-            val left = (region.left * scaleX + offsetX).toInt()
-            val top = (region.top * scaleY + offsetY).toInt()
-            val right = (region.right * scaleX + offsetX).toInt()
-            val bottom = (region.bottom * scaleY + offsetY).toInt()
+            val left = (region.left * scale + offsetX).toInt()
+            val top = (region.top * scale + offsetY).toInt()
+            val right = (region.right * scale + offsetX).toInt()
+            val bottom = (region.bottom * scale + offsetY).toInt()
             return android.graphics.Rect(left, top, right, bottom)
         }
 
@@ -484,7 +483,8 @@ class ScannerActivity : AppCompatActivity() {
                 Log.d(TAG, "Barcode region ML Kit: top=${barcodeRegion.top}, bottom=${barcodeRegion.bottom}")
                 Log.d(TAG, "ML Kit: PIN.bottom (${region.bottom}) < Barcode.top (${barcodeRegion.top}) = ${region.bottom < barcodeRegion.top}")
                 Log.d(TAG, "Image dimensions: ${imageWidth}x${imageHeight}, Preview: ${previewWidth}x${previewHeight}, Rotation: $rotation")
-                Log.d(TAG, "Scale: X=$scaleX, Y=$scaleY, Offset: X=$offsetX, Y=$offsetY")
+                Log.d(TAG, "Image aspect: %.3f, Preview aspect: %.3f".format(imageAspectRatio, previewAspectRatio))
+                Log.d(TAG, "Scale: $scale, Offset: X=$offsetX, Y=$offsetY")
                 Log.d(TAG, "========================")
             }
 
