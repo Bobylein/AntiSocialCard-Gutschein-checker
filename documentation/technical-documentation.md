@@ -459,6 +459,28 @@ REWE gift cards require landscape card orientation to scan the barcode, but the 
 - Preserved ML Kit, WebView, and data model classes
 - Optimized release build size and obfuscation
 
+### v2.3 - Fixed Coordinate Transformation for Preview Overlays
+
+**Problem:**
+The coordinate transformation logic in `ScannerActivity.updateHighlights()` was incorrectly assuming PreviewView uses FIT_CENTER scaling with letterboxing. However, PreviewView uses FILL_CENTER by default, which crops the image to fill the entire view.
+
+**Solution:**
+1. **Updated Scaling Logic**:
+   - Changed from separate `scaleX`/`scaleY` to unified `scale` factor
+   - Implemented proper FILL_CENTER scaling calculations
+   - When image is wider: scale to fill height, crop left/right (negative offset)
+   - When image is taller: scale to fill width, crop top/bottom (negative offset)
+2. **Improved Debug Logging**:
+   - Added aspect ratio logging for both image and preview
+   - Simplified scale logging to show single unified scale factor
+   - Better visibility into coordinate transformation parameters
+
+**Technical Details:**
+- FILL_CENTER scales the image to fill the entire preview view, cropping parts that don't fit
+- Negative offsets indicate the image extends beyond the preview boundaries
+- Coordinate transformation now correctly accounts for cropping behavior
+- More accurate positioning of visual highlight overlays (RED for barcode, BLUE for PIN)
+
 ### v2.1 - German Localization
 
 **Complete UI Translation:**

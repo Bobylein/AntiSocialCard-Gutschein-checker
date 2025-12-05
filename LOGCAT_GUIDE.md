@@ -113,3 +113,4 @@ adb logcat ScannerActivity:D *:S > logs_$(date +%Y%m%d_%H%M%S).txt
 # Right-click in Logcat → Export to File
 ```
 
+

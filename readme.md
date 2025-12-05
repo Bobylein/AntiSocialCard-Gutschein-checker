@@ -98,6 +98,13 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **2.3**:
+  - **Fixed Coordinate Transformation for Preview Overlays**:
+    - Corrected coordinate transformation logic to use FILL_CENTER scaling (PreviewView default)
+    - Previous implementation incorrectly assumed FIT_CENTER scaling with letterboxing
+    - FILL_CENTER crops the image to fill the preview, requiring different offset calculations
+    - Improved debug logging to show aspect ratios for better troubleshooting
+    - More accurate positioning of barcode and PIN highlight overlays
 - **2.2**:
   - **ALDI PIN Detection Position Fix**:
     - Changed ALDI PIN detection region from upper-right to upper-left corner
