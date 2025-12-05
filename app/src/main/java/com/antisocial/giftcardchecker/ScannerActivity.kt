@@ -345,34 +345,23 @@ class ScannerActivity : AppCompatActivity() {
     }
     
     /**
-     * Check if a PIN is likely a false positive (e.g., phone numbers, common patterns).
+     * Check if a PIN is likely a false positive.
+     * With tight search regions, we only reject obvious impossible patterns.
      */
     private fun isLikelyFalsePositive(pin: String): Boolean {
-        // Common false positives to reject
-        val falsePositives = setOf(
-            "0800",  // German toll-free phone number prefix
-            "0000",  // Common placeholder/default
-            "1111",  // Common test/placeholder
-            "1234",  // Common test/placeholder
-            "0001",  // Common placeholder
-        )
-        
-        if (falsePositives.contains(pin)) {
-            return true
-        }
-        
-        // Reject if all digits are the same (e.g., "2222", "9999")
+        // Reject all same digits (0000, 1111, etc.)
         if (pin.all { it == pin[0] }) {
             return true
         }
-        
-        // Reject sequential patterns (e.g., "1234", "4321")
-        val digits = pin.map { it.toString().toInt() }
-        val isSequential = digits.zipWithNext().all { (a, b) -> kotlin.math.abs(a - b) == 1 }
-        if (isSequential) {
+
+        // Reject simple sequential patterns (1234, 4321, 2345, etc.)
+        val digits = pin.map { it.digitToInt() }
+        val isAscending = digits.zipWithNext().all { (a, b) -> b - a == 1 }
+        val isDescending = digits.zipWithNext().all { (a, b) -> a - b == 1 }
+        if (isAscending || isDescending) {
             return true
         }
-        
+
         return false
     }
     
@@ -837,8 +826,27 @@ class ScannerActivity : AppCompatActivity() {
         }
         
         /**
-         * Process PIN detection with region-of-interest.
-         * PIN location depends on market type and card type.
+         * Process PIN detection with tight region-of-interest based on measured card layouts.
+         *
+         * Measurements from actual cards (as ratios of barcode dimensions):
+         *
+         * REWE (both types): PIN is LEFT of barcode
+         *   - PIN width: 35% of barcode width
+         *   - Gap from barcode: 15% of barcode width
+         *   - Vertically centered with barcode
+         *   - PIN height: 50% of barcode height
+         *
+         * ALDI: PIN is UPPER-RIGHT of barcode
+         *   - PIN width: 25% of barcode width
+         *   - Aligned with barcode's right edge
+         *   - Vertical gap: 15% of barcode height
+         *   - PIN height: 40% of barcode height
+         *
+         * Lidl: PIN is UPPER-RIGHT of barcode
+         *   - PIN width: 25% of barcode width
+         *   - Aligned with barcode's right edge
+         *   - Vertical gap: 10% of barcode height
+         *   - PIN height: 45% of barcode height
          */
         private fun processPinWithRegionOfInterest(
             mediaImage: Image,
@@ -850,279 +858,139 @@ class ScannerActivity : AppCompatActivity() {
             onComplete: (String?, Rect?) -> Unit
         ) {
             try {
-                // Calculate region based on market type and card type
-                val regionWidth = (barcodeBox.width() * 0.4f).toInt().coerceAtLeast(100)
-                val regionHeight = (barcodeBox.height() * 0.5f).toInt().coerceAtLeast(50)
-                
+                val barcodeWidth = barcodeBox.width()
+                val barcodeHeight = barcodeBox.height()
+                val isPortraitMode = rotationDegrees == 90 || rotationDegrees == 270
+
                 val pinRegionLeft: Int
                 val pinRegionTop: Int
                 val pinRegionRight: Int
                 val pinRegionBottom: Int
-                
+
                 when (marketType) {
                     MarketType.REWE -> {
-                        // Use already detected REWE card type
+                        // REWE: PIN is to the LEFT of barcode
+                        // Same layout for Type 1 (standard barcode) and Type 2 (Aztec/QR)
                         val cardType = detectedReweCardType ?: ReweCardType.TYPE_1
-                        
-                        when (cardType) {
-                            ReweCardType.TYPE_1 -> {
-                                // TYPE_1: PIN is in a separate field to the LEFT of the barcode
-                                // 
-                                // IMPORTANT: REWE cards are designed to be scanned with the card held
-                                // horizontally (landscape). When the phone is in portrait mode (90° rotation),
-                                // the "left side of the card" maps to the TOP of the ML Kit coordinate system.
-                                //
-                                // We use a barcode-relative region that works regardless of rotation:
-                                // The PIN field is to the left of the barcode on the physical card.
-                                // In ML Kit coordinates (which are rotation-corrected):
-                                // - For 90° rotation: "left of barcode" = above the barcode's bounding box
-                                // - For 0° rotation: "left of barcode" = to the left of barcode's bounding box
-                                //
-                                // Strategy: Search the area to the left AND above the barcode to handle
-                                // different physical card orientations.
-                                
-                                // Calculate region based on barcode position - much more reliable
-                                val barcodeWidth = barcodeBox.width()
-                                val barcodeHeight = barcodeBox.height()
-                                
-                                // For 90° or 270° rotation (portrait phone, landscape card), 
-                                // "left of barcode" appears as "above barcode" in ML Kit coords
-                                // For 0° or 180° rotation, "left of barcode" is actually left
-                                val isPortraitMode = rotationDegrees == 90 || rotationDegrees == 270
-                                
-                                if (isPortraitMode) {
-                                    // In portrait mode with landscape card: PIN is ABOVE barcode in ML Kit coords
-                                    // Search a region above the barcode
-                                    val searchHeight = (barcodeHeight * 2).coerceAtMost(barcodeBox.top)
-                                    pinRegionLeft = (barcodeBox.left - barcodeWidth / 2).coerceAtLeast(0)
-                                    pinRegionTop = (barcodeBox.top - searchHeight).coerceAtLeast(0)
-                                    pinRegionRight = (barcodeBox.right + barcodeWidth / 2).coerceAtMost(imageWidth)
-                                    pinRegionBottom = barcodeBox.top
-                                    
-                                    Log.d(TAG, "REWE TYPE_1 (portrait mode): PIN search ABOVE barcode in ML Kit coords")
-                                } else {
-                                    // In landscape mode: PIN is to the LEFT of barcode in ML Kit coords
-                                    val searchWidth = (barcodeWidth * 2).coerceAtMost(barcodeBox.left)
-                                    pinRegionLeft = (barcodeBox.left - searchWidth).coerceAtLeast(0)
-                                    pinRegionTop = (barcodeBox.top - barcodeHeight / 2).coerceAtLeast(0)
-                                    pinRegionRight = barcodeBox.left
-                                    pinRegionBottom = (barcodeBox.bottom + barcodeHeight / 2).coerceAtMost(imageHeight)
-                                    
-                                    Log.d(TAG, "REWE TYPE_1 (landscape mode): PIN search LEFT of barcode in ML Kit coords")
-                                }
-                                
-                                Log.d(TAG, "Rotation: $rotationDegrees, isPortraitMode: $isPortraitMode")
-                                Log.d(TAG, "Barcode box: left=${barcodeBox.left}, top=${barcodeBox.top}, right=${barcodeBox.right}, bottom=${barcodeBox.bottom}")
-                                Log.d(TAG, "Search region: left=$pinRegionLeft, top=$pinRegionTop, right=$pinRegionRight, bottom=$pinRegionBottom")
-                            }
-                            ReweCardType.TYPE_2 -> {
-                                // TYPE_2: Aztec barcode - PIN location is in separate field to the LEFT
-                                // Apply same rotation-aware logic, but with a gap of 2x pin area height
-                                val barcodeWidth = barcodeBox.width()
-                                val barcodeHeight = barcodeBox.height()
-                                val isPortraitMode = rotationDegrees == 90 || rotationDegrees == 270
-                                
-                                // Gap between barcode and PIN area = 2 times the PIN area height
-                                val gapSize = (regionHeight * 2f).toInt()
-                                
-                                if (isPortraitMode) {
-                                    // PIN is ABOVE barcode in ML Kit coords (portrait phone, landscape card)
-                                    // Add gap of 1.5x pin area height between barcode and PIN search region
-                                    val searchHeight = (barcodeHeight * 2).coerceAtMost((barcodeBox.top - gapSize).coerceAtLeast(0))
-                                    pinRegionLeft = (barcodeBox.left - barcodeWidth / 2).coerceAtLeast(0)
-                                    pinRegionBottom = (barcodeBox.top - gapSize).coerceAtLeast(0)
-                                    pinRegionTop = (pinRegionBottom - searchHeight).coerceAtLeast(0)
-                                    pinRegionRight = (barcodeBox.right + barcodeWidth / 2).coerceAtMost(imageWidth)
-                                    
-                                    Log.d(TAG, "REWE TYPE_2 (portrait mode): Aztec barcode - PIN search ABOVE barcode with gap=$gapSize")
-                                } else {
-                                    // PIN is to the LEFT of barcode in ML Kit coords
-                                    // Add gap of 2x pin area width between barcode and PIN search region
-                                    val gapWidth = (regionWidth * 2f).toInt()
-                                    val searchWidth = (barcodeWidth * 2).coerceAtMost((barcodeBox.left - gapWidth).coerceAtLeast(0))
-                                    pinRegionRight = (barcodeBox.left - gapWidth).coerceAtLeast(0)
-                                    pinRegionLeft = (pinRegionRight - searchWidth).coerceAtLeast(0)
-                                    pinRegionTop = (barcodeBox.top - barcodeHeight / 2).coerceAtLeast(0)
-                                    pinRegionBottom = (barcodeBox.bottom + barcodeHeight / 2).coerceAtMost(imageHeight)
-                                    
-                                    Log.d(TAG, "REWE TYPE_2 (landscape mode): Aztec barcode - PIN search LEFT of barcode with gap=$gapWidth")
-                                }
-                            }
+
+                        // Tight PIN region dimensions
+                        val pinWidth = (barcodeWidth * 0.35f).toInt()
+                        val pinHeight = (barcodeHeight * 0.50f).toInt()
+                        val gapFromBarcode = (barcodeWidth * 0.15f).toInt()
+
+                        if (isPortraitMode) {
+                            // Portrait phone + landscape card: "left" becomes "above"
+                            pinRegionLeft = barcodeBox.centerX() - pinWidth / 2
+                            pinRegionRight = barcodeBox.centerX() + pinWidth / 2
+                            pinRegionBottom = barcodeBox.top - gapFromBarcode
+                            pinRegionTop = pinRegionBottom - pinHeight
+
+                            Log.d(TAG, "REWE $cardType (portrait): PIN region ABOVE barcode")
+                        } else {
+                            // Landscape: PIN is to the LEFT
+                            pinRegionRight = barcodeBox.left - gapFromBarcode
+                            pinRegionLeft = pinRegionRight - pinWidth
+                            pinRegionTop = barcodeBox.centerY() - pinHeight / 2
+                            pinRegionBottom = barcodeBox.centerY() + pinHeight / 2
+
+                            Log.d(TAG, "REWE $cardType (landscape): PIN region LEFT of barcode")
                         }
                     }
-                    MarketType.LIDL -> {
-                        // Detect Lidl card type
-                        val cardType = detectLidlCardType(barcodeBox, imageWidth, imageHeight)
-                        detectedLidlCardType = cardType
-                        
-                        when (cardType) {
-                            LidlCardType.TYPE_1 -> {
-                                // TYPE_1: PIN is in a separate field to the UPPER-RIGHT of the barcode
-                                // The PIN field is typically a distinct rectangular area above and to the right of barcode
-                                // Use a larger region to cover the separate PIN field area
-                                val extendedWidth = (regionWidth * 2).toInt().coerceAtMost(imageWidth / 2)
-                                val extendedHeight = (regionHeight * 2).toInt().coerceAtMost(imageHeight / 2)
-                                
-                                // Position region starting from barcode's upper-right corner, extending upward and rightward
-                                pinRegionLeft = barcodeBox.right - (extendedWidth / 2)
-                                pinRegionTop = (barcodeBox.top - extendedHeight).coerceAtLeast(0)
-                                pinRegionRight = barcodeBox.right + (extendedWidth / 2).coerceAtMost(imageWidth - barcodeBox.right)
-                                pinRegionBottom = barcodeBox.top + (extendedHeight / 2)
-                                Log.d(TAG, "Lidl TYPE_1: PIN in separate field to the UPPER-RIGHT of barcode")
-                                Log.d(TAG, "Extended search region: width=$extendedWidth, height=$extendedHeight")
-                            }
-                        }
-                    }
+
                     MarketType.ALDI -> {
-                        // ALDI: PIN is in a separate field to the UPPER-LEFT of the barcode
-                        // The PIN field is typically a distinct rectangular area above and to the left of barcode
-                        // Use a larger region to cover the separate PIN field area, similar to Lidl but mirrored
-                        val extendedWidth = (regionWidth * 2).toInt().coerceAtMost(imageWidth / 2)
-                        val extendedHeight = (regionHeight * 2).toInt().coerceAtMost(imageHeight / 2)
-                        
-                        // Position region starting from barcode's upper-left corner, extending upward and leftward
-                        // Mirror of Lidl's upper-right positioning: centered around left edge, extending leftward
-                        pinRegionLeft = (barcodeBox.left - extendedWidth).coerceAtLeast(0)
-                        pinRegionTop = (barcodeBox.top - extendedHeight).coerceAtLeast(0)
-                        pinRegionRight = barcodeBox.left  // End at left edge of barcode
-                        pinRegionBottom = barcodeBox.top + (extendedHeight / 2)
-                        
-                        Log.d(TAG, "ALDI: PIN in separate field to the UPPER-LEFT of barcode")
-                        Log.d(TAG, "Extended search region: width=$extendedWidth, height=$extendedHeight")
-                    }
-                    else -> {
-                        // For other cards: PIN is typically in the upper-right corner
-                        // Upper-right corner: start from right edge of barcode, go left
-                        pinRegionLeft = barcodeBox.right - regionWidth
-                        pinRegionTop = barcodeBox.top
+                        // ALDI: PIN "9292" is UPPER-RIGHT of barcode
+                        val pinWidth = (barcodeWidth * 0.25f).toInt()
+                        val pinHeight = (barcodeHeight * 0.40f).toInt()
+                        val verticalGap = (barcodeHeight * 0.15f).toInt()
+
+                        // Aligned with barcode's right edge, above barcode
                         pinRegionRight = barcodeBox.right
-                        pinRegionBottom = barcodeBox.top + regionHeight
-                        Log.d(TAG, "Other card (${marketType}): Looking for PIN in upper-right corner")
+                        pinRegionLeft = pinRegionRight - pinWidth
+                        pinRegionBottom = barcodeBox.top - verticalGap
+                        pinRegionTop = pinRegionBottom - pinHeight
+
+                        Log.d(TAG, "ALDI: PIN region UPPER-RIGHT of barcode")
+                    }
+
+                    MarketType.LIDL -> {
+                        // Lidl: PIN "3478" is UPPER-RIGHT of barcode (similar to ALDI)
+                        detectedLidlCardType = LidlCardType.TYPE_1
+
+                        val pinWidth = (barcodeWidth * 0.25f).toInt()
+                        val pinHeight = (barcodeHeight * 0.45f).toInt()
+                        val verticalGap = (barcodeHeight * 0.10f).toInt()
+
+                        // Aligned with barcode's right edge, above barcode
+                        pinRegionRight = barcodeBox.right
+                        pinRegionLeft = pinRegionRight - pinWidth
+                        pinRegionBottom = barcodeBox.top - verticalGap
+                        pinRegionTop = pinRegionBottom - pinHeight
+
+                        Log.d(TAG, "Lidl: PIN region UPPER-RIGHT of barcode")
                     }
                 }
-                
-                // Ensure region is within image bounds
-                val finalLeft = pinRegionLeft.coerceAtLeast(0)
-                val finalTop = pinRegionTop.coerceAtLeast(0)
-                val finalRight = pinRegionRight.coerceAtMost(imageWidth)
-                val finalBottom = pinRegionBottom.coerceAtMost(imageHeight)
-                
-                val pinRegion = Rect(
-                    finalLeft,
-                    finalTop,
-                    finalRight,
-                    finalBottom
-                )
-                
-                // Store PIN search region for display (in ML Kit coordinate system)
-                pinSearchRegion = pinRegion
-                
-                // Update highlights on UI thread to show PIN search region
-                runOnUiThread { updateHighlights() }
-                
-                Log.d(TAG, "=== PIN REGION DEBUG ===")
-                Log.d(TAG, "Market type: $marketType")
-                when (marketType) {
-                    MarketType.REWE -> detectedReweCardType?.let { Log.d(TAG, "REWE card type: $it") }
-                    MarketType.LIDL -> detectedLidlCardType?.let { Log.d(TAG, "Lidl card type: $it") }
-                    else -> {}
+
+                // Clamp to image bounds and validate
+                val finalLeft = pinRegionLeft.coerceIn(0, imageWidth - 1)
+                val finalTop = pinRegionTop.coerceIn(0, imageHeight - 1)
+                val finalRight = pinRegionRight.coerceIn(1, imageWidth)
+                val finalBottom = pinRegionBottom.coerceIn(1, imageHeight)
+
+                if (finalRight <= finalLeft || finalBottom <= finalTop) {
+                    Log.w(TAG, "Invalid PIN region dimensions after clamping")
+                    onComplete(null, null)
+                    return
                 }
-                Log.d(TAG, "Barcode box: left=${barcodeBox.left}, top=${barcodeBox.top}, right=${barcodeBox.right}, bottom=${barcodeBox.bottom}")
-                Log.d(TAG, "Barcode size: ${barcodeBox.width()}x${barcodeBox.height()}")
-                Log.d(TAG, "Image size: ${imageWidth}x${imageHeight}")
-                Log.d(TAG, "Calculated region width: $regionWidth, height: $regionHeight")
-                Log.d(TAG, "PIN region: left=$finalLeft, top=$finalTop, right=$finalRight, bottom=$finalBottom (size: ${pinRegion.width()}x${pinRegion.height()})")
-                Log.d(TAG, "Rotation degrees: $rotationDegrees")
-                Log.d(TAG, "========================")
-                
-                // Convert Image to Bitmap - keep in original sensor orientation
-                // The text on the card is always upright, so we crop from the original bitmap
-                // and transform ML Kit coordinates to match the bitmap's sensor orientation
+
+                val pinRegion = Rect(finalLeft, finalTop, finalRight, finalBottom)
+                pinSearchRegion = pinRegion
+                runOnUiThread { updateHighlights() }
+
+                Log.d(TAG, "Tight PIN region: $pinRegion (${pinRegion.width()}x${pinRegion.height()})")
+                Log.d(TAG, "Barcode: $barcodeBox (${barcodeWidth}x${barcodeHeight})")
+
+                // Process the cropped region
                 val bitmap = imageToBitmap(mediaImage)
                 if (bitmap != null) {
                     try {
-                        // Transform ML Kit coordinates to original bitmap coordinates
-                        // ML Kit coordinates are relative to display orientation, but bitmap is in sensor orientation
                         val (cropCoords, cropSize) = transformCoordinatesForRotation(
                             finalLeft, finalTop, pinRegion.width(), pinRegion.height(),
-                            bitmap.width, bitmap.height,
-                            rotationDegrees
+                            bitmap.width, bitmap.height, rotationDegrees
                         )
-                        
+
                         val cropLeft = cropCoords.first.coerceIn(0, bitmap.width - 1)
                         val cropTop = cropCoords.second.coerceIn(0, bitmap.height - 1)
                         val cropWidth = cropSize.first.coerceIn(1, bitmap.width - cropLeft)
                         val cropHeight = cropSize.second.coerceIn(1, bitmap.height - cropTop)
-                        
-                        Log.d(TAG, "Crop region (original bitmap): left=$cropLeft, top=$cropTop, width=$cropWidth, height=$cropHeight")
-                        Log.d(TAG, "Original bitmap dimensions: ${bitmap.width}x${bitmap.height}")
-                        Log.d(TAG, "ML Kit coordinates: left=$finalLeft, top=$finalTop, width=${pinRegion.width()}, height=${pinRegion.height()}, rotation=$rotationDegrees")
-                        
-                        // Crop from ORIGINAL bitmap (sensor orientation)
-                        // The text on the card is upright, but the cropped region might be rotated
-                        // due to sensor orientation, so we'll try different rotations in OCR
+
                         val croppedBitmap = Bitmap.createBitmap(
-                            bitmap,
-                            cropLeft,
-                            cropTop,
-                            cropWidth,
-                            cropHeight
+                            bitmap, cropLeft, cropTop, cropWidth, cropHeight
                         )
-                        
-                        // Try OCR with multiple orientations
-                        // The text is upright on the card, but the cropped region orientation
-                        // depends on sensor orientation, so we try different rotations to find the best one
-                        processCroppedBitmapWithMultipleOrientations(croppedBitmap) { pin, pinBox ->
-                            // Clean up bitmaps
-                            if (!croppedBitmap.isRecycled) {
-                                croppedBitmap.recycle()
-                            }
-                            if (!bitmap.isRecycled) {
-                                bitmap.recycle()
-                            }
-                            
+
+                        processCroppedBitmapWithMultipleOrientations(croppedBitmap) { pin, _ ->
+                            if (!croppedBitmap.isRecycled) croppedBitmap.recycle()
+                            if (!bitmap.isRecycled) bitmap.recycle()
+
                             if (pin != null) {
-                                // Validate PIN before returning it - reject false positives
-                                if (isLikelyFalsePositive(pin)) {
-                                    Log.d(TAG, "Rejected likely false positive PIN from region: $pin")
-                                    // For Lidl cards, don't fallback if we get a false positive
-                                    if (marketType == MarketType.LIDL) {
-                                        Log.d(TAG, "Lidl card: False positive detected, not searching full image")
-                                        onComplete(null, null)
-                                    } else {
-                                        // For other cards, try full image fallback
-                                        val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                                        processPinFullImageWithBox(fullImage) { fallbackPin, _ -> onComplete(fallbackPin, null) }
-                                    }
-                                } else {
-                                    Log.d(TAG, "PIN detected (region-of-interest): $pin")
-                                    onComplete(pin, pinRegion)
-                                }
+                                Log.d(TAG, "PIN found in tight region: $pin")
+                                onComplete(pin, pinRegion)
                             } else {
-                                // No PIN found, continue with fallback logic below
-                                handlePinNotFoundInRegion(mediaImage, rotationDegrees, marketType, barcodeBox, imageWidth, imageHeight, bitmap, pinRegion, onComplete)
+                                // With tight regions, don't fall back - if not found, PIN isn't visible
+                                Log.d(TAG, "No PIN in tight region - not falling back")
+                                onComplete(null, null)
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error cropping bitmap", e)
-                        // Clean up original bitmap
-                        if (!bitmap.isRecycled) {
-                            bitmap.recycle()
-                        }
-                        // Fallback to full image
-                        val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                        processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
+                        Log.e(TAG, "Error cropping for PIN", e)
+                        if (!bitmap.isRecycled) bitmap.recycle()
+                        onComplete(null, null)
                     }
                 } else {
-                    Log.w(TAG, "Failed to convert image to bitmap, using full image")
-                    val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                    processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
+                    onComplete(null, null)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing PIN region", e)
-                // Fallback to full image
-                val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
+                Log.e(TAG, "Error in processPinWithRegionOfInterest", e)
+                onComplete(null, null)
             }
         }
         
@@ -1204,111 +1072,6 @@ class ScannerActivity : AppCompatActivity() {
             
             // Start trying orientations
             tryNextOrientation()
-        }
-        
-        /**
-         * Handle case when PIN is not found in the initial region.
-         * Uses rotation-aware fallback strategy.
-         */
-        private fun handlePinNotFoundInRegion(
-            mediaImage: Image,
-            rotationDegrees: Int,
-            marketType: MarketType,
-            barcodeBox: Rect,
-            imageWidth: Int,
-            imageHeight: Int,
-            bitmap: Bitmap,
-            pinRegion: Rect,
-            onComplete: (String?, Rect?) -> Unit
-        ) {
-            Log.d(TAG, "No PIN found in initial region, trying fallback")
-            
-            if (marketType == MarketType.REWE) {
-                val cardType = detectedReweCardType ?: ReweCardType.TYPE_1
-                val isPortraitMode = rotationDegrees == 90 || rotationDegrees == 270
-                
-                // Try a wider search region around the barcode
-                Log.d(TAG, "REWE: Trying wider search region (rotation=$rotationDegrees, isPortrait=$isPortraitMode)")
-                
-                val barcodeWidth = barcodeBox.width()
-                val barcodeHeight = barcodeBox.height()
-                
-                // Create a larger search region that includes both above AND to the left of barcode
-                // This handles the case where the card might be rotated differently than expected
-                val widerRegion: Rect
-                
-                if (isPortraitMode) {
-                    // Portrait mode: search both above barcode AND a bit to the sides
-                    val searchHeight = (barcodeHeight * 3).coerceAtMost(barcodeBox.top)
-                    widerRegion = Rect(
-                        (barcodeBox.left - barcodeWidth).coerceAtLeast(0),
-                        (barcodeBox.top - searchHeight).coerceAtLeast(0),
-                        (barcodeBox.right + barcodeWidth).coerceAtMost(imageWidth),
-                        barcodeBox.centerY() // Include part of barcode area
-                    )
-                } else {
-                    // Landscape mode: search to the left of barcode and a bit above/below
-                    val searchWidth = (barcodeWidth * 3).coerceAtMost(barcodeBox.left)
-                    widerRegion = Rect(
-                        (barcodeBox.left - searchWidth).coerceAtLeast(0),
-                        (barcodeBox.top - barcodeHeight).coerceAtLeast(0),
-                        barcodeBox.centerX(), // Include part of barcode area
-                        (barcodeBox.bottom + barcodeHeight).coerceAtMost(imageHeight)
-                    )
-                }
-                
-                Log.d(TAG, "Wider search region: left=${widerRegion.left}, top=${widerRegion.top}, right=${widerRegion.right}, bottom=${widerRegion.bottom}")
-                
-                if (widerRegion.width() > 0 && widerRegion.height() > 0) {
-                    try {
-                        val (widerCropCoords, widerCropSize) = transformCoordinatesForRotation(
-                            widerRegion.left, widerRegion.top, 
-                            widerRegion.width(), widerRegion.height(),
-                            bitmap.width, bitmap.height,
-                            rotationDegrees
-                        )
-                        
-                        val widerCropLeft = widerCropCoords.first.coerceIn(0, bitmap.width - 1)
-                        val widerCropTop = widerCropCoords.second.coerceIn(0, bitmap.height - 1)
-                        val widerCropWidth = widerCropSize.first.coerceIn(1, bitmap.width - widerCropLeft)
-                        val widerCropHeight = widerCropSize.second.coerceIn(1, bitmap.height - widerCropTop)
-                        
-                        Log.d(TAG, "Wider crop: left=$widerCropLeft, top=$widerCropTop, width=$widerCropWidth, height=$widerCropHeight")
-                        
-                        val widerCroppedBitmap = Bitmap.createBitmap(
-                            bitmap,
-                            widerCropLeft,
-                            widerCropTop,
-                            widerCropWidth,
-                            widerCropHeight
-                        )
-                        
-                        processCroppedBitmapWithMultipleOrientations(widerCroppedBitmap) { widerPin, _ ->
-                            if (!widerCroppedBitmap.isRecycled) {
-                                widerCroppedBitmap.recycle()
-                            }
-                            
-                            if (widerPin != null && !isLikelyFalsePositive(widerPin)) {
-                                Log.d(TAG, "PIN found in wider region: $widerPin")
-                                onComplete(widerPin, widerRegion)
-                            } else {
-                                Log.d(TAG, "REWE: No valid PIN found in wider region either")
-                                onComplete(null, null)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error processing wider region", e)
-                        onComplete(null, null)
-                    }
-                } else {
-                    Log.d(TAG, "REWE: Wider region has zero dimensions, giving up")
-                    onComplete(null, null)
-                }
-            } else {
-                Log.d(TAG, "Trying full image as fallback for non-REWE card")
-                val fullImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                processPinFullImageWithBox(fullImage) { pin, _ -> onComplete(pin, null) }
-            }
         }
 
         /**
