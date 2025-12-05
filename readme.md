@@ -98,6 +98,15 @@ This project is for educational purposes. Use responsibly and respect the terms 
 
 ## Version History
 
+- **2.4**:
+  - **Fixed Live Visualization of PIN Search Regions**:
+    - Completely rewrote coordinate transformation system for overlay positioning
+    - Replaced CameraX CoordinateTransform approach with direct manual transformation
+    - ML Kit coordinates are display-oriented, so direct scaling and offset calculation is used
+    - Properly handles PreviewView ScaleType (FILL_CENTER/FIT_CENTER) for accurate positioning
+    - Overlays now correctly show where barcode and PIN detection is happening
+    - Fixed 90° rotation issues and overlay visibility problems
+    - Improved logging for debugging coordinate transformations
 - **2.3**:
   - **Fixed Coordinate Transformation for Preview Overlays**:
     - Corrected coordinate transformation logic to use FILL_CENTER scaling (PreviewView default)

@@ -360,6 +360,37 @@ REWE gift cards require landscape card orientation to scan the barcode, but the 
 - Native bitmap from `mediaImage` is still in sensor orientation
 - Must transform ML Kit coords back to bitmap coords for cropping
 
+### v2.4 - Fixed Live Visualization of PIN Search Regions
+
+**Problem Solved:**
+The overlay visualization (blue for PIN, red for barcode) was not correctly positioned on screen. Overlays appeared far from actual detection regions, rotated incorrectly, or disappeared entirely.
+
+**Root Cause:**
+- Attempted to use CameraX's `CoordinateTransform` utility, but it expects transforms from sensor orientation
+- ML Kit coordinates are already in display orientation (after rotation correction)
+- Using `ImageProxyTransformFactory` applied an extra rotation transformation
+- Identity matrix approach didn't work correctly with `CoordinateTransform`
+
+**Solution:**
+1. **Direct Manual Transformation**: Replaced `CoordinateTransform` with direct scaling and offset calculation
+2. **Display-to-Display Mapping**: Since both ML Kit and PreviewView are display-oriented, simple scaling suffices
+3. **ScaleType Handling**: Properly accounts for PreviewView's ScaleType:
+   - **FILL_CENTER**: Scales to fill preview, crops if needed (default)
+   - **FIT_CENTER**: Scales to fit within preview, letterboxes if needed
+4. **Aspect Ratio Calculation**: Correctly calculates scale factors based on image vs preview aspect ratios
+5. **Offset Calculation**: Properly centers the scaled image within PreviewView bounds
+
+**Implementation Details:**
+- `updateHighlights()` function now uses direct coordinate transformation
+- Transform formula: `previewCoord = mlKitCoord * scale + offset`
+- Scale and offset calculated based on PreviewView's ScaleType and aspect ratios
+- No rotation needed since both coordinate systems are display-oriented
+
+**Coordinate System:**
+- ML Kit coordinates: Display-oriented, dimensions `mlKitWidth x mlKitHeight` (swapped for 90°/270° rotations)
+- PreviewView coordinates: Display-oriented, dimensions `previewWidth x previewHeight`
+- Transformation: Direct scaling + offset (no rotation)
+
 ### v1.2 - Native Touch Simulation for CAPTCHA Focus
 - **Native Android Touch Events**: Uses MotionEvent.obtain() to simulate touch at CAPTCHA coordinates
 - **Coordinate-Based Approach**: JavaScript calculates field center coordinates, Android simulates touch

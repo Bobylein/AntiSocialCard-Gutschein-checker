@@ -15,6 +15,8 @@ import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.transform.CoordinateTransform
+import androidx.camera.view.transform.OutputTransform
 import androidx.core.content.ContextCompat
 import com.antisocial.giftcardchecker.databinding.ActivityScannerBinding
 import com.antisocial.giftcardchecker.model.GiftCard
@@ -59,6 +61,7 @@ class ScannerActivity : AppCompatActivity() {
     private var imageAnalysisWidth: Int = 1920 // Default, will be updated from actual image
     private var imageAnalysisHeight: Int = 1080 // Default, will be updated from actual image
     private var imageRotationDegrees: Int = 0 // Will be updated from actual image
+    private var imageAnalysisOutputTransform: OutputTransform? = null // For coordinate transformation
     private val isProcessing = AtomicBoolean(false)
     private var autoNavigateEnabled = false // Disabled - require user confirmation
     private var currentZoomRatio: Float = 1.0f
@@ -388,6 +391,9 @@ class ScannerActivity : AppCompatActivity() {
      * Update highlight overlays to show EXPECTED barcode and PIN search regions.
      * - RED: Expected barcode region
      * - BLUE: Expected PIN region
+     * 
+     * This method transforms coordinates from ML Kit's coordinate system (display-oriented)
+     * to PreviewView's coordinate system, accounting for scaling and aspect ratio differences.
      */
     private fun updateHighlights() {
         // Get preview view dimensions
@@ -401,45 +407,90 @@ class ScannerActivity : AppCompatActivity() {
             return
         }
 
-        // Use actual image analysis dimensions (ML Kit coordinate system)
-        val imageWidth = imageAnalysisWidth
-        val imageHeight = imageAnalysisHeight
-        val rotation = imageRotationDegrees
 
-        // PreviewView uses FILL_CENTER by default, which crops the image to fill the entire view
-        // This is different from FIT_CENTER which would letterbox the image
-        val imageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
+        // Direct coordinate transformation: ML Kit coords -> PreviewView coords
+        // Both are in display orientation, so we just need to scale and account for aspect ratio
+        val mlKitWidth = imageAnalysisWidth.toFloat()
+        val mlKitHeight = imageAnalysisHeight.toFloat()
+        
+        Log.d(TAG, "=== COORDINATE TRANSFORMATION ===")
+        Log.d(TAG, "ML Kit image: ${mlKitWidth.toInt()}x${mlKitHeight.toInt()} (rotation: $imageRotationDegrees°)")
+        Log.d(TAG, "PreviewView: ${previewWidth}x${previewHeight}")
+        Log.d(TAG, "Barcode region: $barcodeSearchRegion")
+        Log.d(TAG, "PIN region: $pinSearchRegion")
+
+        // Get PreviewView's ScaleType to determine how to scale
+        val scaleType = previewView.scaleType
+        val imageAspectRatio = mlKitWidth / mlKitHeight
         val previewAspectRatio = previewWidth.toFloat() / previewHeight.toFloat()
 
+        // Calculate scale and offset based on ScaleType
         val scale: Float
         val offsetX: Float
         val offsetY: Float
 
-        // FILL_CENTER scaling logic:
-        // Scale to fill the entire preview, cropping parts that don't fit
-        if (imageAspectRatio > previewAspectRatio) {
-            // Image is wider - scale to fill height, crop left/right
-            // The image fills the preview height completely
-            scale = previewHeight.toFloat() / imageHeight.toFloat()
-            // Negative offset means the image extends beyond the preview on the left
-            offsetX = -(imageWidth * scale - previewWidth) / 2f
-            offsetY = 0f
-        } else {
-            // Image is taller - scale to fill width, crop top/bottom
-            // The image fills the preview width completely
-            scale = previewWidth.toFloat() / imageWidth.toFloat()
-            offsetX = 0f
-            // Negative offset means the image extends beyond the preview on the top
-            offsetY = -(imageHeight * scale - previewHeight) / 2f
+        when (scaleType) {
+            androidx.camera.view.PreviewView.ScaleType.FILL_CENTER -> {
+                // FILL_CENTER: Scale to fill entire preview, cropping if needed
+                if (imageAspectRatio > previewAspectRatio) {
+                    // Image is wider - scale to fill height, crop left/right
+                    scale = previewHeight.toFloat() / mlKitHeight
+                    val scaledWidth = mlKitWidth * scale
+                    offsetX = (previewWidth - scaledWidth) / 2f
+                    offsetY = 0f
+                } else {
+                    // Image is taller - scale to fill width, crop top/bottom
+                    scale = previewWidth.toFloat() / mlKitWidth
+                    val scaledHeight = mlKitHeight * scale
+                    offsetX = 0f
+                    offsetY = (previewHeight - scaledHeight) / 2f
+                }
+            }
+            androidx.camera.view.PreviewView.ScaleType.FIT_CENTER -> {
+                // FIT_CENTER: Scale to fit entirely within preview, letterboxing if needed
+                if (imageAspectRatio > previewAspectRatio) {
+                    // Image is wider - fit to width, letterbox top/bottom
+                    scale = previewWidth.toFloat() / mlKitWidth
+                    val scaledHeight = mlKitHeight * scale
+                    offsetX = 0f
+                    offsetY = (previewHeight - scaledHeight) / 2f
+                } else {
+                    // Image is taller - fit to height, letterbox left/right
+                    scale = previewHeight.toFloat() / mlKitHeight
+                    val scaledWidth = mlKitWidth * scale
+                    offsetX = (previewWidth - scaledWidth) / 2f
+                    offsetY = 0f
+                }
+            }
+            else -> {
+                // Default to FILL_CENTER behavior
+                if (imageAspectRatio > previewAspectRatio) {
+                    scale = previewHeight.toFloat() / mlKitHeight
+                    val scaledWidth = mlKitWidth * scale
+                    offsetX = (previewWidth - scaledWidth) / 2f
+                    offsetY = 0f
+                } else {
+                    scale = previewWidth.toFloat() / mlKitWidth
+                    val scaledHeight = mlKitHeight * scale
+                    offsetX = 0f
+                    offsetY = (previewHeight - scaledHeight) / 2f
+                }
+            }
         }
 
-        // Transform function for a single region
-        fun transformRegion(region: Rect): android.graphics.Rect {
-            val left = (region.left * scale + offsetX).toInt()
-            val top = (region.top * scale + offsetY).toInt()
-            val right = (region.right * scale + offsetX).toInt()
-            val bottom = (region.bottom * scale + offsetY).toInt()
-            return android.graphics.Rect(left, top, right, bottom)
+        Log.d(TAG, "ScaleType: $scaleType, Scale: $scale, Offset: ($offsetX, $offsetY)")
+
+        // Transform function: ML Kit coords -> PreviewView coords
+        fun transformRegion(region: Rect): android.graphics.RectF {
+            val left = region.left * scale + offsetX
+            val top = region.top * scale + offsetY
+            val right = region.right * scale + offsetX
+            val bottom = region.bottom * scale + offsetY
+            
+            val rectF = android.graphics.RectF(left, top, right, bottom)
+            Log.d(TAG, "Transform: MLKit[$region] -> Preview[$rectF]")
+            
+            return rectF
         }
 
         // Update barcode search region highlight (RED) - where we expect the barcode
@@ -447,14 +498,14 @@ class ScannerActivity : AppCompatActivity() {
             val transformed = transformRegion(region)
 
             val layoutParams = binding.barcodeHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            layoutParams.leftMargin = transformed.left.coerceAtLeast(0)
-            layoutParams.topMargin = transformed.top.coerceAtLeast(0)
-            layoutParams.width = transformed.width().coerceAtLeast(1)
-            layoutParams.height = transformed.height().coerceAtLeast(1)
+            layoutParams.leftMargin = transformed.left.toInt().coerceAtLeast(0)
+            layoutParams.topMargin = transformed.top.toInt().coerceAtLeast(0)
+            layoutParams.width = transformed.width().toInt().coerceAtLeast(1)
+            layoutParams.height = transformed.height().toInt().coerceAtLeast(1)
             binding.barcodeHighlight.layoutParams = layoutParams
             binding.barcodeHighlight.visibility = View.VISIBLE
 
-            Log.d(TAG, "Barcode search region (RED): left=${transformed.left}, top=${transformed.top}, width=${transformed.width()}, height=${transformed.height()}, rotation=$rotation")
+            Log.d(TAG, "Barcode highlight (RED): pos=(${layoutParams.leftMargin},${layoutParams.topMargin}), size=(${layoutParams.width}x${layoutParams.height})")
         } ?: run {
             binding.barcodeHighlight.visibility = View.GONE
         }
@@ -464,37 +515,19 @@ class ScannerActivity : AppCompatActivity() {
             val transformed = transformRegion(region)
 
             val layoutParams = binding.pinHighlight.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            layoutParams.leftMargin = transformed.left.coerceAtLeast(0)
-            layoutParams.topMargin = transformed.top.coerceAtLeast(0)
-            layoutParams.width = transformed.width().coerceAtLeast(1)
-            layoutParams.height = transformed.height().coerceAtLeast(1)
+            layoutParams.leftMargin = transformed.left.toInt().coerceAtLeast(0)
+            layoutParams.topMargin = transformed.top.toInt().coerceAtLeast(0)
+            layoutParams.width = transformed.width().toInt().coerceAtLeast(1)
+            layoutParams.height = transformed.height().toInt().coerceAtLeast(1)
             binding.pinHighlight.layoutParams = layoutParams
             binding.pinHighlight.visibility = View.VISIBLE
 
-            // Also log barcode position for comparison
-            barcodeSearchRegion?.let { barcodeRegion ->
-                val barcodeTransformed = transformRegion(barcodeRegion)
-                Log.d(TAG, "=== PIN OVERLAY DEBUG ===")
-                Log.d(TAG, "Barcode overlay: top=${barcodeTransformed.top}, bottom=${barcodeTransformed.bottom}")
-                Log.d(TAG, "PIN overlay: top=${transformed.top}, bottom=${transformed.bottom}")
-                Log.d(TAG, "PIN should be ABOVE barcode: PIN.bottom (${transformed.bottom}) < Barcode.top (${barcodeTransformed.top})")
-                Log.d(TAG, "Actual: PIN.bottom=${transformed.bottom}, Barcode.top=${barcodeTransformed.top}")
-                Log.d(TAG, "PIN region ML Kit: top=${region.top}, bottom=${region.bottom}")
-                Log.d(TAG, "Barcode region ML Kit: top=${barcodeRegion.top}, bottom=${barcodeRegion.bottom}")
-                Log.d(TAG, "ML Kit: PIN.bottom (${region.bottom}) < Barcode.top (${barcodeRegion.top}) = ${region.bottom < barcodeRegion.top}")
-                Log.d(TAG, "Image dimensions: ${imageWidth}x${imageHeight}, Preview: ${previewWidth}x${previewHeight}, Rotation: $rotation")
-                Log.d(TAG, "Image aspect: %.3f, Preview aspect: %.3f".format(imageAspectRatio, previewAspectRatio))
-                Log.d(TAG, "Scale: $scale, Offset: X=$offsetX, Y=$offsetY")
-                Log.d(TAG, "========================")
-            }
-
-            Log.d(TAG, "PIN search region (BLUE): left=${transformed.left}, top=${transformed.top}, width=${transformed.width()}, height=${transformed.height()}, rotation=$rotation")
+            Log.d(TAG, "PIN highlight (BLUE): pos=(${layoutParams.leftMargin},${layoutParams.topMargin}), size=(${layoutParams.width}x${layoutParams.height})")
         } ?: run {
             binding.pinHighlight.visibility = View.GONE
         }
-        
-        // Hide the debug highlight (no longer needed)
-        binding.pinSearchRegionHighlight.visibility = View.GONE
+
+        Log.d(TAG, "=================================")
     }
     
     // Auto-navigation removed - user must confirm manually via button
@@ -629,6 +662,18 @@ class ScannerActivity : AppCompatActivity() {
                 imageAnalysisWidth = mlKitWidth
                 imageAnalysisHeight = mlKitHeight
                 imageRotationDegrees = rotationDegrees
+                
+                // Create OutputTransform for ML Kit coordinate system
+                // ML Kit coordinates are already in display orientation (after rotation correction)
+                // So we use an identity matrix (no rotation) with ML Kit dimensions
+                // This represents ML Kit's coordinate system directly - no transformation needed
+                val mlKitMatrix = Matrix() // Identity matrix - ML Kit coords are already display-oriented
+                imageAnalysisOutputTransform = OutputTransform(
+                    mlKitMatrix,
+                    android.util.Size(mlKitWidth, mlKitHeight)
+                )
+                
+                Log.d(TAG, "Created OutputTransform: ML Kit size=${mlKitWidth}x${mlKitHeight}, ImageProxy=${imageProxy.width}x${imageProxy.height}, rotation=$rotationDegrees°")
 
                 var barcodeResult: String? = null
                 var barcodeBoundingBox: Rect? = null
