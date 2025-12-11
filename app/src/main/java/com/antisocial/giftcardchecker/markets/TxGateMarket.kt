@@ -272,10 +272,27 @@ abstract class TxGateMarket : Market() {
     }
 
     /**
-     * Checks if the current page shows an error.
+     * Checks if the current page shows a CAPTCHA error (wrong solution).
+     * This should be checked before isErrorPageLoaded() to avoid false "invalid card" errors.
+     */
+    fun isCaptchaErrorPageLoaded(html: String): Boolean {
+        val lowerHtml = html.lowercase()
+        // CAPTCHA error messages typically contain "Lösung" (solution) and "falsch" (wrong)
+        return (lowerHtml.contains("lösung") && lowerHtml.contains("falsch")) ||
+               lowerHtml.contains("captcha") && lowerHtml.contains("falsch")
+    }
+
+    /**
+     * Checks if the current page shows an error (excluding CAPTCHA errors).
      */
     override fun isErrorPageLoaded(html: String): Boolean {
         val lowerHtml = html.lowercase()
+
+        // First check if this is a CAPTCHA error - if so, it's not an "invalid card" error
+        if (isCaptchaErrorPageLoaded(html)) {
+            return false
+        }
+
         return lowerHtml.contains("ungültig") ||
                lowerHtml.contains("nicht gefunden") ||
                lowerHtml.contains("fehler") ||

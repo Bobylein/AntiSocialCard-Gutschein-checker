@@ -21,6 +21,7 @@ import com.antisocial.giftcardchecker.captcha.CaptchaImageExtractor
 import com.antisocial.giftcardchecker.captcha.CaptchaSolver
 import com.antisocial.giftcardchecker.databinding.ActivityBalanceCheckBinding
 import com.antisocial.giftcardchecker.markets.Market
+import com.antisocial.giftcardchecker.markets.TxGateMarket
 import com.antisocial.giftcardchecker.model.BalanceCheckState
 import com.antisocial.giftcardchecker.model.BalanceResult
 import com.antisocial.giftcardchecker.model.BalanceStatus
@@ -999,14 +1000,34 @@ class BalanceCheckActivity : AppCompatActivity() {
     }
 
     private fun extractBalance() {
+        // Guard: Only extract balance if we're in the correct state
+        val currentState = stateManager.currentState
+        if (currentState !is BalanceCheckState.CheckingBalance) {
+            Log.d(TAG, "extractBalance() called but not in CheckingBalance state (current: $currentState), skipping")
+            return
+        }
+
         Log.d(TAG, "Extracting balance...")
 
         // Get the page HTML and check for balance
         binding.webView.evaluateJavascript(
             "(function() { return document.body.innerText; })();"
         ) { result ->
+            // Re-check state inside callback as it may have changed
+            if (stateManager.currentState !is BalanceCheckState.CheckingBalance) {
+                Log.d(TAG, "State changed during extractBalance(), skipping result processing")
+                return@evaluateJavascript
+            }
+
             val pageText = result.trim('"').replace("\\n", "\n").replace("\\\"", "\"")
             Log.d(TAG, "Page text length: ${pageText.length}")
+
+            // Check for CAPTCHA error first (before other error checks)
+            if (market is TxGateMarket && (market as TxGateMarket).isCaptchaErrorPageLoaded(pageText)) {
+                Log.d(TAG, "CAPTCHA error detected in extractBalance()")
+                handleCaptchaError()
+                return@evaluateJavascript
+            }
 
             // Parse the response using market-specific logic
             val balanceResult = market.parseBalanceResponse(pageText)
@@ -1028,6 +1049,27 @@ class BalanceCheckActivity : AppCompatActivity() {
                     }
                 }, 5000)
             }
+        }
+    }
+
+    /**
+     * Handle CAPTCHA error - retry auto-solving if attempts remaining, otherwise show error.
+     */
+    private fun handleCaptchaError() {
+        Log.d(TAG, "Handling CAPTCHA error - attempts: $captchaSolveAttempts/$MAX_CAPTCHA_SOLVE_ATTEMPTS")
+
+        if (settingsPreferences.autoCaptchaEnabled && captchaSolveAttempts < MAX_CAPTCHA_SOLVE_ATTEMPTS) {
+            Log.d(TAG, "Will retry CAPTCHA solving (attempt ${captchaSolveAttempts + 1}/$MAX_CAPTCHA_SOLVE_ATTEMPTS)")
+            // Delay to allow new CAPTCHA image to load
+            handler.postDelayed({
+                retryCaptchaSolving()
+            }, 1500)
+        } else {
+            // No more retries - fall back to manual entry
+            Log.d(TAG, "Max CAPTCHA attempts reached, falling back to manual entry")
+            Toast.makeText(this, getString(R.string.auto_captcha_failed), Toast.LENGTH_SHORT).show()
+            stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
+            focusCaptchaField()
         }
     }
 

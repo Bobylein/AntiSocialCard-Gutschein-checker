@@ -72,7 +72,8 @@ class StateManager(private val tag: String = "StateManager") {
             is BalanceCheckState.CheckingBalance -> {
                 to is BalanceCheckState.Success ||
                 to is BalanceCheckState.Error ||
-                to is BalanceCheckState.SolvingCaptcha  // Allow retry on CAPTCHA error
+                to is BalanceCheckState.SolvingCaptcha ||   // Allow retry on CAPTCHA error
+                to is BalanceCheckState.WaitingForCaptcha   // Allow fallback to manual CAPTCHA
             }
             is BalanceCheckState.Success,
             is BalanceCheckState.Error -> {
