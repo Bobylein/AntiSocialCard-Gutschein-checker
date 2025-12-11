@@ -3,6 +3,7 @@ package com.antisocial.giftcardchecker
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
@@ -16,27 +17,44 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.antisocial.giftcardchecker.captcha.CaptchaImageExtractor
+import com.antisocial.giftcardchecker.captcha.CaptchaSolver
 import com.antisocial.giftcardchecker.databinding.ActivityBalanceCheckBinding
 import com.antisocial.giftcardchecker.markets.Market
 import com.antisocial.giftcardchecker.model.BalanceCheckState
 import com.antisocial.giftcardchecker.model.BalanceResult
 import com.antisocial.giftcardchecker.model.BalanceStatus
 import com.antisocial.giftcardchecker.model.GiftCard
+import com.antisocial.giftcardchecker.settings.SettingsPreferences
 import com.antisocial.giftcardchecker.utils.StateManager
 import com.antisocial.giftcardchecker.utils.getParcelableExtraCompat
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import javax.inject.Inject
 
 /**
  * Activity for checking gift card balance using WebView.
  * Loads the retailer's balance check page, fills in the form with JavaScript,
  * and extracts the balance result.
  */
+@AndroidEntryPoint
 class BalanceCheckActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityBalanceCheckBinding
     private lateinit var giftCard: GiftCard
     private lateinit var market: Market
+
+    @Inject
+    lateinit var captchaSolver: CaptchaSolver
+
+    @Inject
+    lateinit var captchaImageExtractor: CaptchaImageExtractor
+
+    @Inject
+    lateinit var settingsPreferences: SettingsPreferences
 
     private val handler = Handler(Looper.getMainLooper())
     private val stateManager = StateManager(TAG)
@@ -119,6 +137,11 @@ class BalanceCheckActivity : AppCompatActivity() {
             is BalanceCheckState.FillingForm -> {
                 showLoading(true)
                 binding.tvLoadingText.text = getString(R.string.form_filling_attempt, state.attemptNumber)
+            }
+            is BalanceCheckState.SolvingCaptcha -> {
+                showLoading(true)
+                binding.tvLoadingText.text = getString(R.string.captcha_solving)
+                binding.tvCaptchaInstruction.visibility = View.GONE
             }
             is BalanceCheckState.WaitingForCaptcha -> {
                 showLoading(false)
@@ -824,15 +847,23 @@ class BalanceCheckActivity : AppCompatActivity() {
                 Log.d(TAG, "CAPTCHA found: ${json.optBoolean("captchaFound")}")
 
                 if (success) {
-                    // Fields filled successfully - transition to waiting for CAPTCHA
-                    stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
+                    val captchaFound = json.optBoolean("captchaFound", false)
 
-                    Log.d(TAG, "Form fields filled successfully. User will submit manually after entering CAPTCHA.")
+                    // Check if auto-CAPTCHA solving is enabled and CAPTCHA was found
+                    if (settingsPreferences.autoCaptchaEnabled && captchaFound) {
+                        Log.d(TAG, "Form fields filled. Auto-CAPTCHA solving enabled, attempting to solve...")
+                        stateManager.transitionTo(BalanceCheckState.SolvingCaptcha)
+                        extractAndSolveCaptcha()
+                    } else {
+                        // Manual CAPTCHA entry
+                        stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
+                        Log.d(TAG, "Form fields filled successfully. User will submit manually after entering CAPTCHA.")
 
-                    // Try to focus CAPTCHA field from Android side as well (backup to JavaScript focus)
-                    handler.postDelayed({
-                        focusCaptchaField()
-                    }, 1000) // Wait 1 second for page to stabilize
+                        // Try to focus CAPTCHA field from Android side as well (backup to JavaScript focus)
+                        handler.postDelayed({
+                            focusCaptchaField()
+                        }, 1000) // Wait 1 second for page to stabilize
+                    }
                 } else {
                     // Form fields not found, retry with longer delay
                     pageLoadAttempts++
@@ -1969,6 +2000,178 @@ class BalanceCheckActivity : AppCompatActivity() {
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    // ==================== Auto-CAPTCHA Solving ====================
+
+    /**
+     * Extract CAPTCHA image and attempt to solve it automatically.
+     */
+    private fun extractAndSolveCaptcha() {
+        Log.d(TAG, "Extracting CAPTCHA image...")
+
+        // Load the CAPTCHA extraction JavaScript
+        val script = loadCaptchaExtractScript()
+
+        binding.webView.evaluateJavascript(script) { result ->
+            lifecycleScope.launch {
+                try {
+                    val cleanResult = result?.trim('"')?.replace("\\\"", "\"")
+                        ?.replace("\\\\", "\\") ?: "{}"
+                    val json = JSONObject(cleanResult)
+
+                    Log.d(TAG, "CAPTCHA extraction result: found=${json.optBoolean("found")}, error=${json.optString("error")}")
+
+                    if (json.optBoolean("found", false)) {
+                        val imageUrl = json.optString("imageUrl", "")
+                        val imageBase64 = json.optString("imageBase64", "")
+
+                        Log.d(TAG, "CAPTCHA image URL: $imageUrl")
+                        Log.d(TAG, "CAPTCHA base64 available: ${imageBase64.isNotEmpty()}")
+
+                        // Try to get the image
+                        val bitmap: Bitmap? = if (imageBase64.isNotEmpty() && !imageBase64.startsWith("data:,")) {
+                            // Decode base64 image
+                            captchaImageExtractor.decodeBase64Image(imageBase64)
+                        } else if (imageUrl.isNotEmpty()) {
+                            // Download image from URL
+                            captchaImageExtractor.downloadCaptchaImage(imageUrl)
+                        } else {
+                            null
+                        }
+
+                        if (bitmap != null) {
+                            Log.d(TAG, "CAPTCHA image obtained: ${bitmap.width}x${bitmap.height}")
+                            solveCaptchaWithModel(bitmap)
+                        } else {
+                            Log.w(TAG, "Failed to get CAPTCHA image")
+                            fallbackToManualCaptcha("Could not load CAPTCHA image")
+                        }
+                    } else {
+                        val error = json.optString("error", "Unknown error")
+                        Log.w(TAG, "CAPTCHA extraction failed: $error")
+                        fallbackToManualCaptcha(error)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error extracting CAPTCHA", e)
+                    fallbackToManualCaptcha(e.message ?: "Extraction error")
+                }
+            }
+        }
+    }
+
+    /**
+     * Run ONNX model inference on the CAPTCHA image.
+     */
+    private fun solveCaptchaWithModel(bitmap: Bitmap) {
+        lifecycleScope.launch {
+            try {
+                Log.d(TAG, "Running CAPTCHA model inference...")
+
+                val solution = withContext(Dispatchers.Default) {
+                    captchaSolver.solve(bitmap)
+                }
+
+                if (solution != null && solution.isNotEmpty()) {
+                    Log.d(TAG, "CAPTCHA solved: $solution")
+                    fillCaptchaAndSubmit(solution)
+                } else {
+                    Log.w(TAG, "Model returned empty/null solution")
+                    fallbackToManualCaptcha("Model inference failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error solving CAPTCHA", e)
+                fallbackToManualCaptcha(e.message ?: "Solving error")
+            }
+        }
+    }
+
+    /**
+     * Fill the CAPTCHA field with the AI solution.
+     * Does NOT submit the form - lets the user verify and use the existing auto-submit mechanism.
+     */
+    private fun fillCaptchaAndSubmit(solution: String) {
+        Log.d(TAG, "Filling CAPTCHA field with solution: $solution")
+
+        val fillScript = """
+            (function() {
+                var captchaInput = document.querySelector('input[name="input"]');
+                if (captchaInput) {
+                    captchaInput.value = '$solution';
+                    captchaInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    captchaInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    captchaInput.focus();
+                    return JSON.stringify({ success: true });
+                }
+                return JSON.stringify({ success: false, error: 'CAPTCHA input not found' });
+            })();
+        """.trimIndent()
+
+        binding.webView.evaluateJavascript(fillScript) { result ->
+            try {
+                val cleanResult = result?.trim('"')?.replace("\\\"", "\"") ?: "{}"
+                val json = JSONObject(cleanResult)
+
+                if (json.optBoolean("success", false)) {
+                    Log.d(TAG, "CAPTCHA field filled with AI solution: $solution")
+
+                    // Transition to WaitingForCaptcha state - show WebView and let user verify/submit
+                    handler.post {
+                        stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
+
+                        // Show a toast indicating the CAPTCHA was auto-filled
+                        Toast.makeText(this, "CAPTCHA ausgefüllt: $solution", Toast.LENGTH_SHORT).show()
+
+                        // Setup auto-submit listener (will trigger when user clicks submit or automatically)
+                        setupAutoSubmitOnCaptchaFill()
+                    }
+                } else {
+                    Log.w(TAG, "Failed to fill CAPTCHA field: ${json.optString("error")}")
+                    fallbackToManualCaptcha("Could not fill CAPTCHA field")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error filling CAPTCHA field", e)
+                fallbackToManualCaptcha(e.message ?: "Fill error")
+            }
+        }
+    }
+
+    /**
+     * Fall back to manual CAPTCHA entry if auto-solve fails.
+     */
+    private fun fallbackToManualCaptcha(reason: String) {
+        Log.w(TAG, "Auto-CAPTCHA failed: $reason, falling back to manual entry")
+
+        handler.post {
+            stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
+            Toast.makeText(this, getString(R.string.auto_captcha_failed), Toast.LENGTH_SHORT).show()
+
+            // Setup auto-submit listener for manual entry
+            setupAutoSubmitOnCaptchaFill()
+
+            // Focus the CAPTCHA field
+            handler.postDelayed({
+                focusCaptchaField()
+            }, 500)
+        }
+    }
+
+    /**
+     * Load the CAPTCHA extraction JavaScript from assets.
+     */
+    private fun loadCaptchaExtractScript(): String {
+        return try {
+            assets.open("js/captcha_extract.js").bufferedReader().use { it.readText() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load captcha_extract.js", e)
+            // Fallback inline script
+            """
+            (function() {
+                var result = { found: false, error: 'Script load failed' };
+                return JSON.stringify(result);
+            })();
+            """.trimIndent()
+        }
     }
 
     companion object {
