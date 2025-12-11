@@ -7,6 +7,20 @@
     android:background="@color/background"
     tools:context=".MainActivity">
 
+    <!-- Settings Button -->
+    <ImageButton
+        android:id="@+id/btnSettings"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:layout_marginEnd="@dimen/spacing_sm"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/settings"
+        android:src="@drawable/ic_settings"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="@color/on_background" />
+
     <!-- REWE Logo -->
     <androidx.cardview.widget.CardView
         android:id="@+id/cardRewe"

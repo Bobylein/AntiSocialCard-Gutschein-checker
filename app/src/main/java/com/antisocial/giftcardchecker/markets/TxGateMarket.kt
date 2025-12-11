@@ -145,6 +145,14 @@ abstract class TxGateMarket : Market() {
 
                 var bodyText = document.body.innerText;
 
+                // Check for CAPTCHA error FIRST (before general error check)
+                // This must come first because CAPTCHA errors also contain 'falsch'
+                if (bodyText.indexOf('Lösung') !== -1 && bodyText.indexOf('falsch') !== -1) {
+                    result.error = 'captcha_error';
+                    Android.onBalanceResult(JSON.stringify(result));
+                    return;
+                }
+
                 // Check for error messages (German)
                 if (bodyText.indexOf('ungültig') !== -1 ||
                     bodyText.indexOf('nicht gefunden') !== -1 ||
@@ -153,13 +161,6 @@ abstract class TxGateMarket : Market() {
                     bodyText.indexOf('inkorrekt') !== -1 ||
                     bodyText.indexOf('gesperrt') !== -1) {
                     result.error = 'invalid_card';
-                    Android.onBalanceResult(JSON.stringify(result));
-                    return;
-                }
-
-                // Check for CAPTCHA error
-                if (bodyText.indexOf('Lösung') !== -1 && bodyText.indexOf('falsch') !== -1) {
-                    result.error = 'captcha_error';
                     Android.onBalanceResult(JSON.stringify(result));
                     return;
                 }
@@ -215,6 +216,12 @@ abstract class TxGateMarket : Market() {
         try {
             val lowerResponse = response.lowercase()
 
+            // Check for CAPTCHA error FIRST (before general error check)
+            // This must come first because CAPTCHA errors also contain 'falsch'
+            if (lowerResponse.contains("lösung") && lowerResponse.contains("falsch")) {
+                return BalanceResult.error("CAPTCHA-Lösung falsch")
+            }
+
             // Check for error indicators (German)
             if (lowerResponse.contains("ungültig") ||
                 lowerResponse.contains("nicht gefunden") ||
@@ -224,11 +231,6 @@ abstract class TxGateMarket : Market() {
                 lowerResponse.contains("unbekannt") ||
                 lowerResponse.contains("gesperrt")) {
                 return BalanceResult.invalidCard("Gutscheinnummer oder PIN ungültig oder Gutschein gesperrt")
-            }
-
-            // Check for CAPTCHA error
-            if (lowerResponse.contains("lösung") && lowerResponse.contains("falsch")) {
-                return BalanceResult.error("CAPTCHA-Lösung falsch")
             }
 
             // Try to extract balance using regex patterns

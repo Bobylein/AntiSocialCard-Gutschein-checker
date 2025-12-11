@@ -114,3 +114,5 @@ adb logcat ScannerActivity:D *:S > logs_$(date +%Y%m%d_%H%M%S).txt
 ```
 
 
+
+

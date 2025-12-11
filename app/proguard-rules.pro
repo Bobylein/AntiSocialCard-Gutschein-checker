@@ -13,11 +13,13 @@
     @dagger.hilt.* <fields>;
 }
 
-# ========== ONNX Runtime ==========
-# Note: ONNX is mentioned in task requirements but not currently used in the project
-# Keeping these rules for future use
+# ========== ONNX Runtime (CAPTCHA Solver) ==========
 -keep class ai.onnxruntime.** { *; }
 -dontwarn ai.onnxruntime.**
+
+# ========== CAPTCHA Solver ==========
+-keep class com.antisocial.giftcardchecker.captcha.** { *; }
+-keepclassmembers class com.antisocial.giftcardchecker.captcha.** { *; }
 
 # ========== Kotlin Coroutines ==========
 -keepnames class kotlinx.coroutines.** { *; }
@@ -112,6 +114,8 @@
     public static *** v(...);
     public static *** i(...);
 }
+
+
 
 
 

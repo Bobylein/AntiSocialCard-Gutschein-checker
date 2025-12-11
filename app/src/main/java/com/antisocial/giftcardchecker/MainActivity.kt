@@ -35,6 +35,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
+        // Settings button click
+        binding.btnSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
         // REWE card click
         binding.cardRewe.setOnClickListener {
             startScanner(MarketType.REWE)

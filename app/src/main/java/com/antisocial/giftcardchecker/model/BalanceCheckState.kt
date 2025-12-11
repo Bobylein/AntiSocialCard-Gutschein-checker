@@ -17,7 +17,12 @@ sealed class BalanceCheckState {
     data class FillingForm(val attemptNumber: Int = 1) : BalanceCheckState()
 
     /**
-     * Form has been filled, waiting for user to solve CAPTCHA
+     * Automatically solving CAPTCHA using AI model
+     */
+    object SolvingCaptcha : BalanceCheckState()
+
+    /**
+     * Form has been filled, waiting for user to solve CAPTCHA manually
      */
     object WaitingForCaptcha : BalanceCheckState()
 
@@ -58,9 +63,15 @@ sealed class BalanceCheckState {
      */
     fun isWaitingForCaptcha(): Boolean = this is WaitingForCaptcha
 
+    /**
+     * Returns true if automatically solving CAPTCHA
+     */
+    fun isSolvingCaptcha(): Boolean = this is SolvingCaptcha
+
     override fun toString(): String = when (this) {
         is Loading -> "Loading"
         is FillingForm -> "FillingForm(attempt=$attemptNumber)"
+        is SolvingCaptcha -> "SolvingCaptcha"
         is WaitingForCaptcha -> "WaitingForCaptcha"
         is CheckingBalance -> "CheckingBalance"
         is Success -> "Success(${result.getFormattedBalance()})"

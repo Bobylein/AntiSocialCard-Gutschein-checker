@@ -107,6 +107,9 @@ dependencies {
     // ML Kit - Text Recognition (OCR)
     implementation("com.google.mlkit:text-recognition:16.0.0")
 
+    // ONNX Runtime for CAPTCHA solving
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
+
     // CameraX
     implementation("androidx.camera:camera-camera2:1.3.1")
     implementation("androidx.camera:camera-lifecycle:1.3.1")

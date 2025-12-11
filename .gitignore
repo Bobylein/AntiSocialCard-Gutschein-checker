@@ -103,6 +103,9 @@ Thumbs.db
 # Cursor
 .cursor/
 
+# VS Code
+.vscode/
+
 # Python virtual environment
 venv/
 env/

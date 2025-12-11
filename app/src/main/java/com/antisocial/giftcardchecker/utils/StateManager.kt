@@ -55,8 +55,14 @@ class StateManager(private val tag: String = "StateManager") {
                 to is BalanceCheckState.Error
             }
             is BalanceCheckState.FillingForm -> {
-                to is BalanceCheckState.WaitingForCaptcha ||
-                to is BalanceCheckState.FillingForm || // Allow retry with different attempt number
+                to is BalanceCheckState.SolvingCaptcha ||    // Auto-CAPTCHA path
+                to is BalanceCheckState.WaitingForCaptcha || // Manual CAPTCHA path
+                to is BalanceCheckState.FillingForm ||       // Allow retry with different attempt number
+                to is BalanceCheckState.Error
+            }
+            is BalanceCheckState.SolvingCaptcha -> {
+                to is BalanceCheckState.CheckingBalance ||   // Success: CAPTCHA solved
+                to is BalanceCheckState.WaitingForCaptcha || // Fallback: manual entry
                 to is BalanceCheckState.Error
             }
             is BalanceCheckState.WaitingForCaptcha -> {
@@ -65,7 +71,8 @@ class StateManager(private val tag: String = "StateManager") {
             }
             is BalanceCheckState.CheckingBalance -> {
                 to is BalanceCheckState.Success ||
-                to is BalanceCheckState.Error
+                to is BalanceCheckState.Error ||
+                to is BalanceCheckState.SolvingCaptcha  // Allow retry on CAPTCHA error
             }
             is BalanceCheckState.Success,
             is BalanceCheckState.Error -> {
