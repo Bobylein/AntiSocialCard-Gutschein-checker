@@ -1041,10 +1041,14 @@ class BalanceCheckActivity : AppCompatActivity() {
                 binding.webView.evaluateJavascript(extractScript, null)
 
                 // If no callback received within timeout, show error
+                // But only if we're still in CheckingBalance state (not retrying CAPTCHA, not already done)
                 handler.postDelayed({
-                    if (stateManager.currentState !is BalanceCheckState.Success &&
-                        stateManager.currentState !is BalanceCheckState.Error) {
+                    val currentState = stateManager.currentState
+                    if (currentState is BalanceCheckState.CheckingBalance) {
+                        Log.d(TAG, "Balance extraction timeout - no result received")
                         stateManager.transitionTo(BalanceCheckState.Error(BalanceResult.parsingError("Could not extract balance")))
+                    } else {
+                        Log.d(TAG, "Balance extraction timeout fired but state already changed to: $currentState")
                     }
                 }, 5000)
             }
