@@ -20,6 +20,15 @@
 
         var bodyText = document.body.innerText || '';
 
+        // Check for CAPTCHA error FIRST (before general error check)
+        // CAPTCHA errors contain "Lösung" (solution) and "falsch" (wrong)
+        if ((bodyText.indexOf('Lösung') !== -1 || bodyText.indexOf('lösung') !== -1) &&
+            bodyText.indexOf('falsch') !== -1) {
+            result.error = 'captcha_error';
+            Android.onBalanceResult(JSON.stringify(result));
+            return;
+        }
+
         // Check for error messages (German)
         if (bodyText.indexOf('ungültig') !== -1 ||
             bodyText.indexOf('nicht gefunden') !== -1 ||
