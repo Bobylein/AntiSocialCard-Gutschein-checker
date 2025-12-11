@@ -1329,8 +1329,15 @@ class BalanceCheckActivity : AppCompatActivity() {
         @JavascriptInterface
         fun onBalanceResult(jsonString: String) {
             Log.d(TAG, "Balance result received: $jsonString")
-            
+
             handler.post {
+                // Guard: Only process if we're in CheckingBalance state
+                val currentState = stateManager.currentState
+                if (currentState !is BalanceCheckState.CheckingBalance) {
+                    Log.d(TAG, "onBalanceResult received but not in CheckingBalance state (current: $currentState), ignoring")
+                    return@post
+                }
+
                 try {
                     val json = JSONObject(jsonString)
                     val success = json.optBoolean("success", false)
