@@ -1820,7 +1820,9 @@ class BalanceCheckActivity : AppCompatActivity() {
 
                 if (solution != null && solution.isNotEmpty()) {
                     Log.d(TAG, "CAPTCHA solved: $solution")
-                    fillCaptchaAndSubmit(solution)
+                    // Auto-submit on retry attempts, wait for user on first attempt
+                    val autoSubmit = captchaSolveAttempts > 0
+                    fillCaptchaAndSubmit(solution, autoSubmit)
                 } else {
                     Log.w(TAG, "Model returned empty/null solution")
                     fallbackToManualCaptcha("Model inference failed")
@@ -1835,9 +1837,10 @@ class BalanceCheckActivity : AppCompatActivity() {
     /**
      * Fill the CAPTCHA field with the AI solution.
      * Simulates realistic typing to ensure the form recognizes the input.
-     * Does NOT auto-submit - lets the user verify and click submit manually.
+     * @param solution The CAPTCHA solution to fill
+     * @param autoSubmit If true, automatically submit the form after filling (used for retries)
      */
-    private fun fillCaptchaAndSubmit(solution: String) {
+    private fun fillCaptchaAndSubmit(solution: String, autoSubmit: Boolean = false) {
         Log.d(TAG, "Filling CAPTCHA field with solution: $solution")
 
         // Script that simulates realistic keyboard input character by character
@@ -1920,14 +1923,23 @@ class BalanceCheckActivity : AppCompatActivity() {
                 val json = JSONObject(cleanResult)
 
                 if (json.optBoolean("success", false)) {
-                    Log.d(TAG, "CAPTCHA field filled with AI solution: $solution")
+                    Log.d(TAG, "CAPTCHA field filled with AI solution: $solution (autoSubmit=$autoSubmit)")
 
                     handler.post {
-                        stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
                         Toast.makeText(this, "CAPTCHA: $solution", Toast.LENGTH_SHORT).show()
 
-                        // Setup auto-submit listener for when user clicks submit
-                        setupAutoSubmitOnCaptchaFill()
+                        if (autoSubmit) {
+                            // On retry: automatically submit the form
+                            Log.d(TAG, "Auto-submitting form after CAPTCHA retry")
+                            // Small delay to ensure the field value is properly registered
+                            handler.postDelayed({
+                                submitForm()
+                            }, 500)
+                        } else {
+                            // First attempt: wait for user to verify and click submit
+                            stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
+                            setupAutoSubmitOnCaptchaFill()
+                        }
                     }
                 } else {
                     Log.w(TAG, "Failed to fill CAPTCHA field: ${json.optString("error")}")
