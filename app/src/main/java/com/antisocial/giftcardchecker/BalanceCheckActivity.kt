@@ -60,7 +60,9 @@ class BalanceCheckActivity : AppCompatActivity() {
     private val stateManager = StateManager(TAG)
     private var pageLoadAttempts = 0
     private var tabClickAttempts = 0
+    private var captchaSolveAttempts = 0
     private val MAX_TAB_CLICK_ATTEMPTS = 5
+    private val MAX_CAPTCHA_SOLVE_ATTEMPTS = 3
     private val processedUrls = mutableSetOf<String>()
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -362,12 +364,12 @@ class BalanceCheckActivity : AppCompatActivity() {
                 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    
-                    // Ignore iframe and resource URLs - only process main frame URLs
-                    if (url == null || url.startsWith("data:") || url.startsWith("javascript:") || 
+
+                    // Ignore iframe, resource URLs, and blank pages - only process main frame URLs
+                    if (url == null || url == "about:blank" || url.startsWith("data:") || url.startsWith("javascript:") ||
                         url.contains("_Incapsula_Resource") || url.contains("csp_report") ||
                         url.contains("mell-my-spricking")) {
-                        Log.d(TAG, "Ignoring resource/iframe URL: $url")
+                        Log.d(TAG, "Ignoring resource/iframe/blank URL: $url")
                         return
                     }
                     
@@ -635,7 +637,17 @@ class BalanceCheckActivity : AppCompatActivity() {
         pageLoadAttempts = 0
         tabClickAttempts = 0
         processedUrls.clear() // Reset processed URLs
-        
+
+        // Reset WebView zoom to default before loading
+        // This ensures consistent zoom behavior across activity recreations
+        binding.webView.setInitialScale(0) // 0 = use default zoom
+        binding.webView.settings.loadWithOverviewMode = true
+        binding.webView.settings.useWideViewPort = true
+
+        // Clear any previous page content to ensure clean zoom state
+        // Load about:blank first, then the actual URL after a short delay
+        binding.webView.loadUrl("about:blank")
+
         // For ALDI and Lidl, navigate directly to the iframe URL (same as browser)
         // This avoids the blank page issue and works immediately
         val urlToLoad = when (market.marketType) {
@@ -649,29 +661,32 @@ class BalanceCheckActivity : AppCompatActivity() {
             }
             else -> market.balanceCheckUrl
         }
-        
+
         Log.d(TAG, "Loading balance check URL: $urlToLoad")
-        
-        // For ALDI and Lidl iframe URLs, load with referrer header to prevent blank page
-        if ((market.marketType == com.antisocial.giftcardchecker.model.MarketType.ALDI || 
-             market.marketType == com.antisocial.giftcardchecker.model.MarketType.LIDL) && 
-            urlToLoad.contains("balancechecks.tx-gate.com")) {
-            // Use loadUrl with additional headers (requires API 21+)
-            val referrer = when (market.marketType) {
-                com.antisocial.giftcardchecker.model.MarketType.ALDI -> "https://www.helaba.com/de/aldi/"
-                com.antisocial.giftcardchecker.model.MarketType.LIDL -> "https://www.lidl.de/c/lidl-geschenkkarten/s10007775"
-                else -> ""
+
+        // Delay actual page load slightly to ensure blank page clears zoom state
+        handler.postDelayed({
+            // For ALDI and Lidl iframe URLs, load with referrer header to prevent blank page
+            if ((market.marketType == com.antisocial.giftcardchecker.model.MarketType.ALDI ||
+                 market.marketType == com.antisocial.giftcardchecker.model.MarketType.LIDL) &&
+                urlToLoad.contains("balancechecks.tx-gate.com")) {
+                // Use loadUrl with additional headers (requires API 21+)
+                val referrer = when (market.marketType) {
+                    com.antisocial.giftcardchecker.model.MarketType.ALDI -> "https://www.helaba.com/de/aldi/"
+                    com.antisocial.giftcardchecker.model.MarketType.LIDL -> "https://www.lidl.de/c/lidl-geschenkkarten/s10007775"
+                    else -> ""
+                }
+                val headers = mapOf(
+                    "Referer" to referrer,
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                    "Accept-Language" to "de-DE,de;q=0.9,en;q=0.8"
+                )
+                Log.d(TAG, "Loading with headers: $headers")
+                binding.webView.loadUrl(urlToLoad, headers)
+            } else {
+                binding.webView.loadUrl(urlToLoad)
             }
-            val headers = mapOf(
-                "Referer" to referrer,
-                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language" to "de-DE,de;q=0.9,en;q=0.8"
-            )
-            Log.d(TAG, "Loading with headers: $headers")
-            binding.webView.loadUrl(urlToLoad, headers)
-        } else {
-            binding.webView.loadUrl(urlToLoad)
-        }
+        }, 100) // 100ms delay to allow blank page to reset zoom state
     }
 
     private fun fillFormFields() {
@@ -852,6 +867,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                     // Check if auto-CAPTCHA solving is enabled and CAPTCHA was found
                     if (settingsPreferences.autoCaptchaEnabled && captchaFound) {
                         Log.d(TAG, "Form fields filled. Auto-CAPTCHA solving enabled, attempting to solve...")
+                        captchaSolveAttempts = 0  // Reset retry counter for fresh solve
                         stateManager.transitionTo(BalanceCheckState.SolvingCaptcha)
                         extractAndSolveCaptcha()
                     } else {
@@ -934,361 +950,30 @@ class BalanceCheckActivity : AppCompatActivity() {
     }
 
     /**
-     * Sets up automatic form submission when CAPTCHA input field is filled.
-     * Monitors the captcha input field and submits the form automatically when user enters the captcha solution.
-     * Enhanced with comprehensive debugging and multiple detection strategies.
+     * Sets up listener to detect when the user submits the form.
+     * Does NOT auto-submit or interfere with user input - only listens for form submission.
      */
     private fun setupAutoSubmitOnCaptchaFill() {
-        Log.d(TAG, "=== Setting up auto-submit on CAPTCHA fill ===")
-        
+        Log.d(TAG, "=== Setting up form submission listener ===")
+
         val script = """
             (function() {
-                var submitted = false;
-                var monitoringAttempts = 0;
-                var maxMonitoringAttempts = 30; // 30 seconds of retrying
-                var iframeSrcHistory = [];
-                
-                // Debug logging function that sends to Android
-                function debug(msg) {
-                    console.log('[CAPTCHA-DEBUG] ' + msg);
+                // Only listen for form submit events (user clicking submit button)
+                document.addEventListener('submit', function(e) {
+                    console.log('[CAPTCHA] Form submit event detected');
                     try {
                         if (typeof Android !== 'undefined' && Android.log) {
-                            Android.log('[CAPTCHA-DEBUG] ' + msg);
+                            Android.log('FORM_SUBMITTED_DETECTED');
                         }
-                    } catch (e) {}
-                }
-                
-                debug('=== Auto-submit script initialized ===');
-                debug('Current URL: ' + window.location.href);
-                
-                // Log all iframes on the page
-                function logIframes() {
-                    var iframes = document.querySelectorAll('iframe');
-                    debug('Found ' + iframes.length + ' iframes on page');
-                    for (var i = 0; i < iframes.length; i++) {
-                        var iframe = iframes[i];
-                        debug('Iframe ' + i + ': src=' + (iframe.src || 'none') + ', name=' + (iframe.name || 'none') + ', id=' + (iframe.id || 'none'));
-                        
-                        // Try to access iframe content
-                        try {
-                            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                            if (iframeDoc) {
-                                debug('  -> Iframe ' + i + ' is ACCESSIBLE (same-origin)');
-                                var inputs = iframeDoc.querySelectorAll('input');
-                                debug('  -> Found ' + inputs.length + ' inputs in iframe');
-                                for (var j = 0; j < inputs.length; j++) {
-                                    debug('     Input ' + j + ': name=' + (inputs[j].name || 'none') + ', type=' + (inputs[j].type || 'none'));
-                                }
-                            }
-                        } catch (e) {
-                            debug('  -> Iframe ' + i + ' is BLOCKED (cross-origin): ' + e.message);
-                        }
-                    }
-                }
-                
-                // Log all inputs on main document
-                function logMainInputs() {
-                    var inputs = document.querySelectorAll('input');
-                    debug('Found ' + inputs.length + ' inputs on main document');
-                    for (var i = 0; i < inputs.length; i++) {
-                        debug('Input ' + i + ': name=' + (inputs[i].name || 'none') + ', type=' + (inputs[i].type || 'none') + ', id=' + (inputs[i].id || 'none'));
-                    }
-                }
-                
-                function findCaptchaInput() {
-                    debug('Searching for CAPTCHA input...');
-                    
-                    // Try to find captcha input in main document
-                    var captchaInput = document.querySelector('input[name="input"]');
-                    if (captchaInput) {
-                        debug('Found CAPTCHA input in main document!');
-                        return captchaInput;
-                    }
-                    debug('CAPTCHA input NOT found in main document');
-                    
-                    // If not found, try to find in iframe (for ALDI)
-                    var iframes = document.querySelectorAll('iframe');
-                    debug('Checking ' + iframes.length + ' iframes for CAPTCHA input...');
-                    
-                    for (var i = 0; i < iframes.length; i++) {
-                        try {
-                            var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
-                            if (iframeDoc) {
-                                debug('Iframe ' + i + ' accessible, searching for input[name="input"]...');
-                                captchaInput = iframeDoc.querySelector('input[name="input"]');
-                                if (captchaInput) {
-                                    debug('Found CAPTCHA input in iframe ' + i + '!');
-                                    return captchaInput;
-                                }
-                                debug('CAPTCHA input not found in iframe ' + i);
-                            }
-                        } catch (e) {
-                            debug('Iframe ' + i + ' cross-origin blocked: ' + e.message);
-                        }
-                    }
-                    
-                    debug('CAPTCHA input NOT found anywhere');
-                    return null;
-                }
-                
-                function submitForm() {
-                    if (submitted) {
-                        debug('Form already submitted, skipping');
-                        return;
-                    }
-                    
-                    submitted = true;
-                    debug('=== AUTO-SUBMITTING FORM ===');
-                    
-                    // Notify Android that form is being submitted (so it can show loading)
-                    try {
-                        if (typeof Android !== 'undefined' && Android.log) {
-                            Android.log('AUTO_SUBMIT_START');
-                        }
-                    } catch (e) {
-                        debug('Could not notify Android: ' + e.message);
-                    }
-                    
-                    // Find submit button in main document
-                    var submitButton = document.querySelector('input[name="check"]') ||
-                                      document.querySelector('input[type="submit"]') ||
-                                      document.querySelector('button[type="submit"]');
-                    
-                    if (submitButton) {
-                        debug('Found submit button in main document, clicking...');
-                        submitButton.click();
-                        debug('Form submitted via button click');
-                        return;
-                    }
-                    
-                    debug('Submit button not found in main document, checking iframes...');
-                    
-                    // Try iframe if not found in main document
-                    var iframes = document.querySelectorAll('iframe');
-                    for (var i = 0; i < iframes.length; i++) {
-                        try {
-                            var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
-                            if (iframeDoc) {
-                                submitButton = iframeDoc.querySelector('input[name="check"]') ||
-                                              iframeDoc.querySelector('input[type="submit"]') ||
-                                              iframeDoc.querySelector('button[type="submit"]');
-                                if (submitButton) {
-                                    debug('Found submit button in iframe ' + i + ', clicking...');
-                                    submitButton.click();
-                                    debug('Form submitted via iframe button click');
-                                    return;
-                                }
-                                
-                                // Try form submit
-                                var form = iframeDoc.querySelector('form');
-                                if (form) {
-                                    debug('Found form in iframe ' + i + ', submitting...');
-                                    form.submit();
-                                    debug('Form submitted via iframe form.submit()');
-                                    return;
-                                }
-                            }
-                        } catch (e) {
-                            debug('Could not access iframe ' + i + ': ' + e.message);
-                        }
-                    }
-                    
-                    // Try form submit on main document as fallback
-                    var form = document.querySelector('form');
-                    if (form) {
-                        debug('Found form in main document, submitting...');
-                        form.submit();
-                        debug('Form submitted via form.submit()');
-                    } else {
-                        debug('ERROR: No submit button or form found!');
-                    }
-                }
-                
-                function setupCaptchaMonitoring() {
-                    monitoringAttempts++;
-                    debug('=== CAPTCHA monitoring attempt ' + monitoringAttempts + '/' + maxMonitoringAttempts + ' ===');
-                    
-                    // Log current state
-                    logMainInputs();
-                    logIframes();
-                    
-                    var captchaInput = findCaptchaInput();
-                    
-                    if (captchaInput) {
-                        debug('SUCCESS: CAPTCHA input found! Setting up event listeners...');
-                        
-                        // Monitor input events
-                        captchaInput.addEventListener('input', function(e) {
-                            var value = e.target.value || '';
-                            debug('CAPTCHA input event fired, value length: ' + value.length);
-                            
-                            if (value.length > 0 && !submitted) {
-                                debug('Value detected, will submit in 500ms...');
-                                setTimeout(function() {
-                                    submitForm();
-                                }, 500);
-                            }
-                        }, true);
-                        
-                        // Also monitor change events
-                        captchaInput.addEventListener('change', function(e) {
-                            var value = e.target.value || '';
-                            debug('CAPTCHA change event fired, value length: ' + value.length);
-                            
-                            if (value.length > 0 && !submitted) {
-                                debug('Value detected, will submit in 500ms...');
-                                setTimeout(function() {
-                                    submitForm();
-                                }, 500);
-                            }
-                        }, true);
-                        
-                        // Monitor blur event (when user leaves the field)
-                        captchaInput.addEventListener('blur', function(e) {
-                            var value = e.target.value || '';
-                            debug('CAPTCHA blur event fired, value length: ' + value.length);
-                            
-                            if (value.length > 0 && !submitted) {
-                                debug('Value detected on blur, will submit in 500ms...');
-                                setTimeout(function() {
-                                    submitForm();
-                                }, 500);
-                            }
-                        }, true);
-                        
-                        debug('Event listeners attached successfully!');
-                        
-                        // Notify Android that monitoring is set up
-                        try {
-                            if (typeof Android !== 'undefined' && Android.log) {
-                                Android.log('CAPTCHA_MONITORING_ACTIVE');
-                            }
-                        } catch (e) {}
-                        
-                    } else {
-                        debug('CAPTCHA input not found yet');
-                        
-                        if (monitoringAttempts < maxMonitoringAttempts) {
-                            debug('Will retry in 1 second...');
-                            setTimeout(function() {
-                                setupCaptchaMonitoring();
-                            }, 1000);
-                        } else {
-                            debug('Max monitoring attempts reached, giving up on CAPTCHA detection');
-                            // Notify Android that auto-submit won't work
-                            try {
-                                if (typeof Android !== 'undefined' && Android.log) {
-                                    Android.log('CAPTCHA_DETECTION_FAILED');
-                                }
-                            } catch (e) {}
-                        }
-                    }
-                }
-                
-                // === ALTERNATIVE DETECTION: Monitor iframe URL changes ===
-                function monitorIframeNavigation() {
-                    debug('Setting up iframe navigation monitoring...');
-                    
-                    var iframes = document.querySelectorAll('iframe');
-                    for (var i = 0; i < iframes.length; i++) {
-                        var iframe = iframes[i];
-                        var currentSrc = iframe.src || '';
-                        iframeSrcHistory[i] = currentSrc;
-                        
-                        // Set up load event listener
-                        iframe.addEventListener('load', function(e) {
-                            debug('Iframe load event detected!');
-                            var newSrc = e.target.src || '';
-                            debug('Iframe navigated to: ' + newSrc);
-                            
-                            // If iframe URL changed significantly, it might be a form submission
-                            if (newSrc !== '' && newSrc !== iframeSrcHistory[i]) {
-                                debug('Iframe URL changed! Old: ' + iframeSrcHistory[i] + ', New: ' + newSrc);
-                                iframeSrcHistory[i] = newSrc;
-                                
-                                // Check if this looks like a balance result page
-                                if (newSrc.indexOf('result') !== -1 || newSrc.indexOf('balance') !== -1) {
-                                    debug('Possible balance result page detected!');
-                                    try {
-                                        if (typeof Android !== 'undefined' && Android.log) {
-                                            Android.log('IFRAME_NAVIGATION_DETECTED');
-                                        }
-                                    } catch (e) {}
-                                }
-                            }
-                        });
-                    }
-                }
-                
-                // === ALTERNATIVE DETECTION: MutationObserver for DOM changes ===
-                function setupMutationObserver() {
-                    debug('Setting up MutationObserver...');
-                    
-                    var observer = new MutationObserver(function(mutations) {
-                        for (var i = 0; i < mutations.length; i++) {
-                            var mutation = mutations[i];
-                            
-                            // Check for new iframes being added
-                            if (mutation.type === 'childList') {
-                                for (var j = 0; j < mutation.addedNodes.length; j++) {
-                                    var node = mutation.addedNodes[j];
-                                    if (node.tagName === 'IFRAME') {
-                                        debug('New iframe added to DOM: ' + (node.src || 'no src'));
-                                        // Re-setup monitoring when new iframe appears
-                                        setTimeout(function() {
-                                            setupCaptchaMonitoring();
-                                            monitorIframeNavigation();
-                                        }, 500);
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    
-                    observer.observe(document.body, {
-                        childList: true,
-                        subtree: true
-                    });
-                    
-                    debug('MutationObserver active');
-                }
-                
-                // === ALTERNATIVE DETECTION: Listen for form submission events ===
-                function setupFormSubmissionListener() {
-                    debug('Setting up form submission listener...');
-                    
-                    // Listen for submit events on main document
-                    document.addEventListener('submit', function(e) {
-                        debug('Form submit event captured on main document!');
-                        if (!submitted) {
-                            try {
-                                if (typeof Android !== 'undefined' && Android.log) {
-                                    Android.log('AUTO_SUBMIT_START');
-                                }
-                            } catch (err) {}
-                        }
-                    }, true);
-                    
-                    debug('Form submission listener active');
-                }
-                
-                // Start all monitoring mechanisms
-                debug('Starting all monitoring mechanisms...');
-                
-                // Wait a short delay for page to stabilize
-                setTimeout(function() {
-                    setupCaptchaMonitoring();
-                    monitorIframeNavigation();
-                    setupMutationObserver();
-                    setupFormSubmissionListener();
-                }, 500);
-                
-                debug('Auto-submit script setup complete');
+                    } catch (err) {}
+                }, false);
+
+                console.log('[CAPTCHA] Form submission listener active');
             })();
         """.trimIndent()
-        
+
         binding.webView.evaluateJavascript(script) { result ->
-            Log.d(TAG, "Auto-submit on CAPTCHA fill script injected: $result")
+            Log.d(TAG, "Form submission listener injected: $result")
         }
     }
 
@@ -1631,7 +1316,16 @@ class BalanceCheckActivity : AppCompatActivity() {
                             BalanceResult.invalidCard()
                         }
                         error == "captcha_error" -> {
-                            Log.d(TAG, "CAPTCHA error detected")
+                            Log.d(TAG, "CAPTCHA error detected - solution was incorrect")
+                            // Check if we should retry auto-CAPTCHA solving
+                            if (settingsPreferences.autoCaptchaEnabled && captchaSolveAttempts < MAX_CAPTCHA_SOLVE_ATTEMPTS) {
+                                Log.d(TAG, "Will retry CAPTCHA solving (attempt ${captchaSolveAttempts + 1}/$MAX_CAPTCHA_SOLVE_ATTEMPTS)")
+                                // Delay to allow new CAPTCHA image to load
+                                handler.postDelayed({
+                                    retryCaptchaSolving()
+                                }, 1500)
+                                return@post // Don't transition to Error state yet
+                            }
                             BalanceResult.error("CAPTCHA solution incorrect")
                         }
                         error == "balance_not_found" -> {
@@ -2088,22 +1782,83 @@ class BalanceCheckActivity : AppCompatActivity() {
 
     /**
      * Fill the CAPTCHA field with the AI solution.
-     * Does NOT submit the form - lets the user verify and use the existing auto-submit mechanism.
+     * Simulates realistic typing to ensure the form recognizes the input.
+     * Does NOT auto-submit - lets the user verify and click submit manually.
      */
     private fun fillCaptchaAndSubmit(solution: String) {
         Log.d(TAG, "Filling CAPTCHA field with solution: $solution")
 
+        // Script that simulates realistic keyboard input character by character
         val fillScript = """
             (function() {
+                var result = { success: false, error: null };
+
                 var captchaInput = document.querySelector('input[name="input"]');
-                if (captchaInput) {
-                    captchaInput.value = '$solution';
-                    captchaInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    captchaInput.dispatchEvent(new Event('change', { bubbles: true }));
-                    captchaInput.focus();
-                    return JSON.stringify({ success: true });
+                if (!captchaInput) {
+                    result.error = 'CAPTCHA input not found';
+                    return JSON.stringify(result);
                 }
-                return JSON.stringify({ success: false, error: 'CAPTCHA input not found' });
+
+                // Focus the field
+                captchaInput.focus();
+
+                // Clear existing value
+                captchaInput.value = '';
+
+                // Simulate typing each character with proper keyboard events
+                var solution = '$solution';
+                for (var i = 0; i < solution.length; i++) {
+                    var char = solution[i];
+                    var keyCode = char.charCodeAt(0);
+
+                    // KeyboardEvent for keydown
+                    captchaInput.dispatchEvent(new KeyboardEvent('keydown', {
+                        key: char,
+                        code: 'Key' + char.toUpperCase(),
+                        keyCode: keyCode,
+                        which: keyCode,
+                        bubbles: true,
+                        cancelable: true
+                    }));
+
+                    // KeyboardEvent for keypress
+                    captchaInput.dispatchEvent(new KeyboardEvent('keypress', {
+                        key: char,
+                        code: 'Key' + char.toUpperCase(),
+                        keyCode: keyCode,
+                        which: keyCode,
+                        charCode: keyCode,
+                        bubbles: true,
+                        cancelable: true
+                    }));
+
+                    // Actually add the character to the value
+                    captchaInput.value += char;
+
+                    // Input event (most important for modern frameworks)
+                    captchaInput.dispatchEvent(new InputEvent('input', {
+                        data: char,
+                        inputType: 'insertText',
+                        bubbles: true,
+                        cancelable: true
+                    }));
+
+                    // KeyboardEvent for keyup
+                    captchaInput.dispatchEvent(new KeyboardEvent('keyup', {
+                        key: char,
+                        code: 'Key' + char.toUpperCase(),
+                        keyCode: keyCode,
+                        which: keyCode,
+                        bubbles: true,
+                        cancelable: true
+                    }));
+                }
+
+                // Final change event
+                captchaInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+                result.success = true;
+                return JSON.stringify(result);
             })();
         """.trimIndent()
 
@@ -2115,14 +1870,11 @@ class BalanceCheckActivity : AppCompatActivity() {
                 if (json.optBoolean("success", false)) {
                     Log.d(TAG, "CAPTCHA field filled with AI solution: $solution")
 
-                    // Transition to WaitingForCaptcha state - show WebView and let user verify/submit
                     handler.post {
                         stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
+                        Toast.makeText(this, "CAPTCHA: $solution", Toast.LENGTH_SHORT).show()
 
-                        // Show a toast indicating the CAPTCHA was auto-filled
-                        Toast.makeText(this, "CAPTCHA ausgefüllt: $solution", Toast.LENGTH_SHORT).show()
-
-                        // Setup auto-submit listener (will trigger when user clicks submit or automatically)
+                        // Setup auto-submit listener for when user clicks submit
                         setupAutoSubmitOnCaptchaFill()
                     }
                 } else {
@@ -2154,6 +1906,24 @@ class BalanceCheckActivity : AppCompatActivity() {
                 focusCaptchaField()
             }, 500)
         }
+    }
+
+    /**
+     * Retry solving the CAPTCHA after an incorrect attempt.
+     * Called when the CAPTCHA was wrong and a new one is loaded.
+     */
+    private fun retryCaptchaSolving() {
+        captchaSolveAttempts++
+        Log.d(TAG, "Retrying CAPTCHA solving (attempt $captchaSolveAttempts/$MAX_CAPTCHA_SOLVE_ATTEMPTS)")
+
+        // Show a toast indicating retry
+        Toast.makeText(this, getString(R.string.captcha_retry, captchaSolveAttempts, MAX_CAPTCHA_SOLVE_ATTEMPTS), Toast.LENGTH_SHORT).show()
+
+        // Transition to SolvingCaptcha state
+        stateManager.transitionTo(BalanceCheckState.SolvingCaptcha)
+
+        // Extract and solve the new CAPTCHA
+        extractAndSolveCaptcha()
     }
 
     /**
