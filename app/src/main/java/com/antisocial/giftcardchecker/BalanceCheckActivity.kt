@@ -498,12 +498,11 @@ class BalanceCheckActivity : AppCompatActivity() {
                         """.trimIndent(), null)
                     }
                     
-                    // If we're checking balance (form was submitted), extract balance instead of filling form
+                    // If we're checking balance (form was submitted), don't fill form again
+                    // Note: extractBalance() is called from submitForm() callback, not here,
+                    // to avoid race conditions between multiple extractBalance() calls
                     if (stateManager.currentState.isCheckingBalance()) {
-                        Log.d(TAG, "Form was submitted, extracting balance from result page")
-                        handler.postDelayed({
-                            extractBalance()
-                        }, 2000) // Wait 2 seconds for page to fully render
+                        Log.d(TAG, "Form was submitted, waiting for submitForm callback to extract balance")
                         return
                     }
                     
