@@ -70,8 +70,8 @@
     <string name="website">Website</string>
     <string name="back">Zurück</string>
     <string name="auto_captcha_title">Automatische CAPTCHA-Erkennung</string>
-    <string name="auto_captcha_description">CAPTCHA automatisch mit KI lösen</string>
-    <string name="auto_captcha_info">Wenn aktiviert, versucht die App das CAPTCHA automatisch zu lösen. Bei Fehlern wird auf manuelle Eingabe zurückgegriffen.</string>
+    <string name="auto_captcha_description">CAPTCHA automatisch mit "KI" lösen</string>
+    <string name="auto_captcha_info">Wenn aktiviert, versucht die App das CAPTCHA automatisch zu lösen. Die Erkennung läuft vollständig auf dem Gerät; bei Fehlern wird auf manuelle Eingabe zurückgegriffen.</string>
     <string name="auto_captcha_failed">Automatische Erkennung fehlgeschlagen</string>
     <string name="captcha_solving">CAPTCHA wird gelöst…</string>
     <string name="captcha_retry">CAPTCHA war falsch, neuer Versuch (%1$d/%2$d)…</string>
@@ -88,6 +88,4 @@
     <string name="service_unavailable">Service vorübergehend nicht verfügbar</string>
     <string name="balance_label">Guthaben: %s</string>
 </resources>
-
-
 
