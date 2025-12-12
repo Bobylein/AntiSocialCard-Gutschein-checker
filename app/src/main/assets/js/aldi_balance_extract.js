@@ -14,9 +14,16 @@
     var bodyText = document.body.innerText;
 
     // Check for CAPTCHA error FIRST (before general error check)
-    // CAPTCHA errors contain "Lösung" (solution) and "falsch" (wrong)
-    if ((bodyText.indexOf('Lösung') !== -1 || bodyText.indexOf('lösung') !== -1) &&
-        bodyText.indexOf('falsch') !== -1) {
+    // CAPTCHA error messages can be:
+    // - "Lösung ist falsch" (solution is wrong)
+    // - "Fehler beim Lösen des CAPTCHA" (error solving the CAPTCHA)
+    var hasLoesung = bodyText.indexOf('Lösung') !== -1 || bodyText.indexOf('lösung') !== -1;
+    var hasFalsch = bodyText.indexOf('falsch') !== -1;
+    var hasFehler = bodyText.indexOf('Fehler') !== -1 || bodyText.indexOf('fehler') !== -1;
+    var hasCaptcha = bodyText.indexOf('CAPTCHA') !== -1 || bodyText.indexOf('captcha') !== -1;
+
+    if ((hasLoesung && hasFalsch) || (hasCaptcha && hasFalsch) ||
+        (hasFehler && hasCaptcha) || (hasFehler && hasLoesung)) {
         result.error = 'captcha_error';
         Android.onBalanceResult(JSON.stringify(result));
         return;

@@ -277,9 +277,13 @@ abstract class TxGateMarket : Market() {
      */
     fun isCaptchaErrorPageLoaded(html: String): Boolean {
         val lowerHtml = html.lowercase()
-        // CAPTCHA error messages typically contain "Lösung" (solution) and "falsch" (wrong)
+        // CAPTCHA error messages can be:
+        // - "Lösung ist falsch" (solution is wrong)
+        // - "Fehler beim Lösen des CAPTCHA" (error solving the CAPTCHA)
         return (lowerHtml.contains("lösung") && lowerHtml.contains("falsch")) ||
-               lowerHtml.contains("captcha") && lowerHtml.contains("falsch")
+               (lowerHtml.contains("captcha") && lowerHtml.contains("falsch")) ||
+               (lowerHtml.contains("fehler") && lowerHtml.contains("captcha")) ||
+               (lowerHtml.contains("fehler") && lowerHtml.contains("lösung"))
     }
 
     /**

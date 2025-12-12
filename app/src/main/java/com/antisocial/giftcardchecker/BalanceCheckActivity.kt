@@ -1020,9 +1020,12 @@ class BalanceCheckActivity : AppCompatActivity() {
 
             val pageText = result.trim('"').replace("\\n", "\n").replace("\\\"", "\"")
             Log.d(TAG, "Page text length: ${pageText.length}")
+            Log.d(TAG, "Page text content: $pageText")
 
             // Check for CAPTCHA error first (before other error checks)
-            if (market is TxGateMarket && (market as TxGateMarket).isCaptchaErrorPageLoaded(pageText)) {
+            val isCaptchaError = market is TxGateMarket && (market as TxGateMarket).isCaptchaErrorPageLoaded(pageText)
+            Log.d(TAG, "isCaptchaError check: $isCaptchaError (contains lösung: ${pageText.lowercase().contains("lösung")}, contains falsch: ${pageText.lowercase().contains("falsch")})")
+            if (isCaptchaError) {
                 Log.d(TAG, "CAPTCHA error detected in extractBalance()")
                 handleCaptchaError()
                 return@evaluateJavascript
