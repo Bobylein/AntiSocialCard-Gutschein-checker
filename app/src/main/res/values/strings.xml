@@ -56,6 +56,7 @@
     <string name="captcha_instruction_short">Bitte lösen Sie das CAPTCHA und klicken Sie dann auf \'Guthabenabfrage\'.\n\nDie Gutscheinnummer und PIN wurden bereits automatisch ausgefüllt.</string>
     <string name="check_balance_button">Guthaben prüfen</string>
     <string name="balance_found">Guthaben gefunden</string>
+    <string name="show_webview">WebView anzeigen</string>
     <string name="card_label">Karte: %s</string>
     <string name="submit">Absenden</string>
     <string name="auto_detection_not_possible">Automatische Erkennung nicht möglich.</string>
@@ -66,6 +67,7 @@
     
     <!-- Settings -->
     <string name="settings">Einstellungen</string>
+    <string name="website">Website</string>
     <string name="back">Zurück</string>
     <string name="auto_captcha_title">Automatische CAPTCHA-Erkennung</string>
     <string name="auto_captcha_description">CAPTCHA automatisch mit KI lösen</string>

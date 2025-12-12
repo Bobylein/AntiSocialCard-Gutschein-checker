@@ -1125,6 +1125,15 @@ class BalanceCheckActivity : AppCompatActivity() {
         binding.tvBalance.visibility = View.VISIBLE
         binding.tvErrorMessage.visibility = View.GONE
         binding.tvCardInfo.text = getString(R.string.card_label, giftCard.getMaskedCardNumber())
+
+        // Show the "Show WebView" button
+        binding.btnShowWebView.visibility = View.VISIBLE
+        binding.btnShowWebView.setOnClickListener {
+            // Hide the result card and show the WebView
+            binding.resultCard.visibility = View.GONE
+            binding.buttonsLayout.visibility = View.GONE
+            binding.webView.visibility = View.VISIBLE
+        }
     }
 
     private fun showError(result: BalanceResult) {

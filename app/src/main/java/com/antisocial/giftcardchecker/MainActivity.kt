@@ -2,6 +2,7 @@ package com.antisocial.giftcardchecker
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -24,6 +25,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val SUPPORT_URL = "https://stadtteilladen.gaarden.net/anti-socialcard/support/"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,6 +37,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
+        // Website button click
+        binding.btnWebsite.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(SUPPORT_URL))
+            startActivity(intent)
+        }
+
         // Settings button click
         binding.btnSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))

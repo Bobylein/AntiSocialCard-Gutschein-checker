@@ -7,6 +7,20 @@
     android:background="@color/background"
     tools:context=".MainActivity">
 
+    <!-- Website Button -->
+    <Button
+        android:id="@+id/btnWebsite"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:layout_marginEnd="@dimen/spacing_sm"
+        android:background="?attr/selectableItemBackground"
+        android:text="@string/website"
+        android:textAllCaps="false"
+        android:textColor="@color/on_background"
+        app:layout_constraintEnd_toStartOf="@id/btnSettings"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <!-- Settings Button -->
     <ImageButton
         android:id="@+id/btnSettings"

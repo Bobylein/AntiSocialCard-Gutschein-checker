@@ -162,6 +162,19 @@
                 android:visibility="gone"
                 tools:text="Invalid card number or PIN" />
 
+            <!-- Show WebView button -->
+            <Button
+                android:id="@+id/btnShowWebView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_md"
+                android:background="?attr/selectableItemBackground"
+                android:text="@string/show_webview"
+                android:textAllCaps="false"
+                android:textColor="@color/secondary"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
         </LinearLayout>
 
     </androidx.cardview.widget.CardView>
