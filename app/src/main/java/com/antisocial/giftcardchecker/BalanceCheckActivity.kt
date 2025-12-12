@@ -1823,9 +1823,7 @@ class BalanceCheckActivity : AppCompatActivity() {
 
                 if (solution != null && solution.isNotEmpty()) {
                     Log.d(TAG, "CAPTCHA solved: $solution")
-                    // Auto-submit on retry attempts, wait for user on first attempt
-                    val autoSubmit = captchaSolveAttempts > 0
-                    fillCaptchaAndSubmit(solution, autoSubmit)
+                    fillCaptchaAndSubmit(solution)
                 } else {
                     Log.w(TAG, "Model returned empty/null solution")
                     fallbackToManualCaptcha("Model inference failed")
@@ -1840,10 +1838,10 @@ class BalanceCheckActivity : AppCompatActivity() {
     /**
      * Fill the CAPTCHA field with the AI solution.
      * Simulates realistic typing to ensure the form recognizes the input.
+     * For TxGateMarket (Lidl/Aldi), automatically submits the form after filling.
      * @param solution The CAPTCHA solution to fill
-     * @param autoSubmit If true, automatically submit the form after filling (used for retries)
      */
-    private fun fillCaptchaAndSubmit(solution: String, autoSubmit: Boolean = false) {
+    private fun fillCaptchaAndSubmit(solution: String) {
         Log.d(TAG, "Filling CAPTCHA field with solution: $solution")
 
         // Script that simulates realistic keyboard input character by character
@@ -1926,20 +1924,20 @@ class BalanceCheckActivity : AppCompatActivity() {
                 val json = JSONObject(cleanResult)
 
                 if (json.optBoolean("success", false)) {
-                    Log.d(TAG, "CAPTCHA field filled with AI solution: $solution (autoSubmit=$autoSubmit)")
+                    Log.d(TAG, "CAPTCHA field filled with AI solution: $solution")
 
                     handler.post {
                         Toast.makeText(this, "CAPTCHA: $solution", Toast.LENGTH_SHORT).show()
 
-                        if (autoSubmit) {
-                            // On retry: automatically submit the form
-                            Log.d(TAG, "Auto-submitting form after CAPTCHA retry")
+                        // Always auto-submit when AI solver fills the CAPTCHA (for Lidl/Aldi TxGateMarket)
+                        if (market is TxGateMarket) {
+                            Log.d(TAG, "Auto-submitting form after AI CAPTCHA solve (TxGateMarket)")
                             // Small delay to ensure the field value is properly registered
                             handler.postDelayed({
                                 submitForm()
                             }, 500)
                         } else {
-                            // First attempt: wait for user to verify and click submit
+                            // For other markets, wait for user verification
                             stateManager.transitionTo(BalanceCheckState.WaitingForCaptcha)
                             setupAutoSubmitOnCaptchaFill()
                         }
