@@ -71,6 +71,31 @@ class ReweMarketTest {
     }
 
     @Test
+    fun `parseBalanceResponse prefers labeled balance over product prices`() {
+        val response = """
+            <div class="product">REWE Geschenkkarte 15 €</div>
+            <div class="balance">Ihr Guthaben beträgt 1,00 €</div>
+        """.trimIndent()
+
+        val result = market.parseBalanceResponse(response)
+
+        assertTrue(result.isSuccess())
+        assertEquals("1.00", result.balance)
+    }
+
+    @Test
+    fun `parseBalanceResponse ignores prices without balance keywords`() {
+        val response = """
+            <div>REWE Geschenkkarte 15 €</div>
+            <div>Weitere Optionen 25 €</div>
+        """.trimIndent()
+
+        val result = market.parseBalanceResponse(response)
+
+        assertEquals(BalanceStatus.PARSING_ERROR, result.status)
+    }
+
+    @Test
     fun `parseBalanceResponse extracts balance with Guthaben label`() {
         val response = "Guthaben: 15,75 €"
 

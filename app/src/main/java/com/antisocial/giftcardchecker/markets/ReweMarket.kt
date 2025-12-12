@@ -4,7 +4,6 @@ import android.graphics.Color
 import com.antisocial.giftcardchecker.model.BalanceResult
 import com.antisocial.giftcardchecker.model.GiftCard
 import com.antisocial.giftcardchecker.model.MarketType
-import java.util.regex.Pattern
 
 /**
  * Market implementation for REWE gift card balance checking.
@@ -235,7 +234,13 @@ class ReweMarket : Market() {
                     html: document.body.innerHTML
                 };
 
-                var bodyText = document.body.innerText;
+                var bodyText = (document.body.innerText || '').replace(/\u00a0/g, ' ');
+                var keywordRegex = /(guthaben|saldo|verf[uü]gbar|restbetrag|betrag)/i;
+                var amountPattern = /(?:€\s*|eur\s*)?([0-9]{1,3}(?:[.,][0-9]{2}))\s*(?:€|eur)?/i;
+
+                function normalizeAmount(value) {
+                    return value ? value.replace(',', '.') : null;
+                }
 
                 // Check for error messages
                 if (bodyText.indexOf('ungültig') !== -1 ||
@@ -246,35 +251,76 @@ class ReweMarket : Market() {
                     return;
                 }
 
-                // Try to find balance patterns
-                var balancePatterns = [
-                    /Guthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€/i,
-                    /([0-9]+[,\.][0-9]{2})\s*€/,
-                    /€\s*([0-9]+[,\.][0-9]{2})/,
-                    /([0-9]+[,\.][0-9]{2})\s*EUR/i
-                ];
-
-                for (var i = 0; i < balancePatterns.length; i++) {
-                    var match = bodyText.match(balancePatterns[i]);
-                    if (match && match[1]) {
-                        result.success = true;
-                        result.balance = match[1].replace(',', '.');
-                        break;
-                    }
-                }
-
-                // Look for specific balance elements
-                var balanceElements = document.querySelectorAll('[class*="balance"], [class*="guthaben"]');
-                if (!result.success && balanceElements.length > 0) {
-                    for (var j = 0; j < balanceElements.length; j++) {
-                        var text = balanceElements[j].innerText;
-                        var match = text.match(/([0-9]+[,\.][0-9]{2})/);
-                        if (match) {
-                            result.success = true;
-                            result.balance = match[1].replace(',', '.');
-                            break;
+                function extractFromBalanceElements() {
+                    var balanceElements = document.querySelectorAll('[class*="balance" i], [class*="guthaben" i], [id*="balance" i], [id*="guthaben" i]');
+                    for (var i = 0; i < balanceElements.length; i++) {
+                        var text = (balanceElements[i].innerText || '').trim();
+                        if (!keywordRegex.test(text)) continue;
+                        var match = text.match(amountPattern);
+                        if (match && match[1]) {
+                            return normalizeAmount(match[1]);
                         }
                     }
+                    return null;
+                }
+
+                function extractFromKeywordLines(text) {
+                    var lines = text.split(/[\r\n]+/);
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i].trim();
+                        if (!line) continue;
+                        if (!keywordRegex.test(line)) continue;
+                        var match = line.match(amountPattern);
+                        if (match && match[1]) {
+                            return normalizeAmount(match[1]);
+                        }
+                    }
+                    return null;
+                }
+
+                function extractFromContextPatterns(text) {
+                    var patterns = [
+                        /guthaben[^0-9]{0,60}([0-9]{1,3}(?:[.,][0-9]{2}))/i,
+                        /saldo[^0-9]{0,60}([0-9]{1,3}(?:[.,][0-9]{2}))/i,
+                        /verf[uü]gbar[^0-9]{0,60}([0-9]{1,3}(?:[.,][0-9]{2}))/i,
+                        /restbetrag[^0-9]{0,60}([0-9]{1,3}(?:[.,][0-9]{2}))/i
+                    ];
+
+                    for (var i = 0; i < patterns.length; i++) {
+                        var match = text.match(patterns[i]);
+                        if (match && match[1]) {
+                            return normalizeAmount(match[1]);
+                        }
+                    }
+                    return null;
+                }
+
+                function extractIfSingleAmount(text) {
+                    var matches = text.match(/([0-9]{1,3}(?:[.,][0-9]{2}))\s*(?:€|eur)/gi);
+                    if (matches && matches.length > 0) {
+                        var unique = [];
+                        for (var i = 0; i < matches.length; i++) {
+                            var amountOnly = matches[i].match(/([0-9]{1,3}(?:[.,][0-9]{2}))/);
+                            if (amountOnly && unique.indexOf(amountOnly[1]) === -1) {
+                                unique.push(amountOnly[1]);
+                            }
+                        }
+                        if (unique.length === 1) {
+                            return normalizeAmount(unique[0]);
+                        }
+                    }
+                    return null;
+                }
+
+                var hasBalanceKeyword = keywordRegex.test(bodyText);
+
+                result.balance = extractFromBalanceElements() ||
+                                 extractFromKeywordLines(bodyText) ||
+                                 extractFromContextPatterns(bodyText) ||
+                                 (hasBalanceKeyword ? extractIfSingleAmount(bodyText) : null);
+
+                if (result.balance) {
+                    result.success = true;
                 }
 
                 if (!result.success && !result.error) {
@@ -297,20 +343,46 @@ class ReweMarket : Market() {
                 return BalanceResult.invalidCard("Kartennummer oder PIN ungültig")
             }
 
-            // Try to extract balance using regex patterns
-            val balancePatterns = listOf(
-                Pattern.compile("""Guthaben[:\s]*([0-9]+[,\.][0-9]{2})\s*€""", Pattern.CASE_INSENSITIVE),
-                Pattern.compile("""([0-9]+[,\.][0-9]{2})\s*€"""),
-                Pattern.compile("""€\s*([0-9]+[,\.][0-9]{2})"""),
-                Pattern.compile("""([0-9]+[,\.][0-9]{2})\s*EUR""", Pattern.CASE_INSENSITIVE)
+            val normalizedResponse = response.replace("\u00A0", " ")
+            val containsBalanceKeyword = lowerResponse.contains("guthaben") ||
+                lowerResponse.contains("saldo") ||
+                lowerResponse.contains("restbetrag") ||
+                lowerResponse.contains("verfügbar")
+            val keywordRegex = Regex("(guthaben|saldo|verf[uü]gbar|restbetrag|betrag)", RegexOption.IGNORE_CASE)
+            val amountWithCurrency = Regex("(?:€\\s*|eur\\s*)?([0-9]{1,3}(?:[.,][0-9]{2}))\\s*(?:€|eur)?", RegexOption.IGNORE_CASE)
+            val contextPatterns = listOf(
+                Regex("guthaben[^0-9]{0,60}([0-9]{1,3}(?:[.,][0-9]{2}))", RegexOption.IGNORE_CASE),
+                Regex("saldo[^0-9]{0,60}([0-9]{1,3}(?:[.,][0-9]{2}))", RegexOption.IGNORE_CASE),
+                Regex("verf[uü]gbar[^0-9]{0,60}([0-9]{1,3}(?:[.,][0-9]{2}))", RegexOption.IGNORE_CASE),
+                Regex("restbetrag[^0-9]{0,60}([0-9]{1,3}(?:[.,][0-9]{2}))", RegexOption.IGNORE_CASE)
             )
 
-            for (pattern in balancePatterns) {
-                val matcher = pattern.matcher(response)
-                if (matcher.find()) {
-                    val balance = matcher.group(1)?.replace(",", ".") ?: continue
+            normalizedResponse.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && keywordRegex.containsMatchIn(it) }
+                .forEach { line ->
+                    val match = amountWithCurrency.find(line)
+                    if (match != null) {
+                        val balance = match.groupValues[1].replace(",", ".")
+                        return BalanceResult.success(balance, "EUR")
+                    }
+                }
+
+            for (pattern in contextPatterns) {
+                val match = pattern.find(normalizedResponse)
+                if (match != null) {
+                    val balance = match.groupValues[1].replace(",", ".")
                     return BalanceResult.success(balance, "EUR")
                 }
+            }
+
+            val amounts = amountWithCurrency.findAll(normalizedResponse)
+                .map { it.groupValues[1].replace(",", ".") }
+                .toList()
+
+            val distinctAmounts = amounts.distinct()
+            if (containsBalanceKeyword && distinctAmounts.size == 1 && distinctAmounts.isNotEmpty()) {
+                return BalanceResult.success(distinctAmounts.first(), "EUR")
             }
 
             return BalanceResult.parsingError("Guthaben konnte nicht gelesen werden", response)
