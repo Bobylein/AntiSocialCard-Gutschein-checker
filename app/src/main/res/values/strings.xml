@@ -19,7 +19,12 @@
     <string name="barcode_label">Barcode: %s</string>
     <string name="pin_label">PIN: %s</string>
     <string name="verify_data">Daten überprüfen</string>
-    
+    <string name="select_pin_title">PIN bestätigen</string>
+    <string name="select_pin_instruction">Wählen Sie die erkannte PIN oder geben Sie sie manuell ein:</string>
+    <string name="enter_pin_manually">Oder PIN manuell eingeben:</string>
+    <string name="use_pin">OK</string>
+    <string name="cancel">Abbrechen</string>
+
     <!-- PIN Entry Activity -->
     <string name="pin_entry_title">PIN eingeben</string>
     <string name="pin_entry_instruction">Geben Sie die PIN von Ihrer Geschenkkarte ein</string>

@@ -35,6 +35,12 @@ import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.media.Image
+import android.widget.Button
+import android.widget.LinearLayout
+import androidx.appcompat.app.AlertDialog
+import com.antisocial.giftcardchecker.databinding.DialogPinSelectionBinding
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -56,6 +62,7 @@ class ScannerActivity : AppCompatActivity() {
     private var marketType: MarketType = MarketType.REWE
     private var detectedBarcode: String? = null
     private var detectedPin: String? = null
+    private val detectedPins = linkedSetOf<String>() // Track all detected PINs in order of detection
     private var pinSearchRegion: Rect? = null // Store expected PIN search region (BLUE)
     private var barcodeSearchRegion: Rect? = null // Store expected barcode search region (RED)
     private var imageAnalysisWidth: Int = 1920 // Default, will be updated from actual image
@@ -63,8 +70,10 @@ class ScannerActivity : AppCompatActivity() {
     private var imageRotationDegrees: Int = 0 // Will be updated from actual image
     private var imageAnalysisOutputTransform: OutputTransform? = null // For coordinate transformation
     private val isProcessing = AtomicBoolean(false)
-    private var autoNavigateEnabled = false // Disabled - require user confirmation
+    private var hasAutoNavigated = false // Prevent multiple auto-navigations
     private var currentZoomRatio: Float = 1.0f
+    private var pinSelectionDialog: AlertDialog? = null // Reference to dialog for updating
+    private var pinSelectionDialogBinding: DialogPinSelectionBinding? = null // Dialog binding for updates
     
     /**
      * Card types for different markets - different card designs have different PIN locations
@@ -145,7 +154,7 @@ class ScannerActivity : AppCompatActivity() {
         }
 
         binding.btnManualEntry.setOnClickListener {
-            autoNavigateEnabled = false
+            hasAutoNavigated = true // Prevent auto-navigation when going manual
             navigateToBalanceCheck()
         }
 
@@ -458,34 +467,44 @@ class ScannerActivity : AppCompatActivity() {
         detectedBarcode = processedBarcode
         // Note: We show expected search regions, not detected bounding boxes
         updateUI()
-        
+
         Log.d(TAG, "Original barcode: $barcode -> Processed: $processedBarcode")
+
+        // Check if we should auto-navigate (if we already have a PIN)
+        checkAutoNavigate()
     }
     
     private fun onPinDetected(pin: String, boundingBox: Rect?) {
-        if (detectedPin == pin) return // Already showing this PIN
-        
         // Validate PIN before accepting it
         if (!isValidPin(pin)) {
             Log.d(TAG, "Rejected invalid PIN: $pin")
             return
         }
-        
-        // If we already have a PIN, only replace it if the new one is more likely to be correct
-        if (detectedPin != null) {
-            if (isLikelyFalsePositive(pin)) {
-                Log.d(TAG, "Rejected likely false positive PIN: $pin (keeping existing: $detectedPin)")
-                return
-            }
-            // Only replace if new PIN seems more reliable (e.g., from a better region)
-            Log.d(TAG, "Replacing PIN: $detectedPin -> $pin")
+
+        // Reject likely false positives
+        if (isLikelyFalsePositive(pin)) {
+            Log.d(TAG, "Rejected likely false positive PIN: $pin")
+            return
         }
-        
-        detectedPin = pin
+
+        // Add to set of detected PINs
+        val isNewPin = detectedPins.add(pin)
+        if (!isNewPin && detectedPin == pin) {
+            return // Already have this PIN and it's the displayed one
+        }
+
+        Log.d(TAG, "PIN detected: $pin (total unique PINs: ${detectedPins.size})")
+
+        // If this is the first valid PIN, set it as the displayed one
+        if (detectedPin == null) {
+            detectedPin = pin
+        }
+
         // Note: We show expected search regions, not detected bounding boxes
         updateUI()
-        
-        Log.d(TAG, "PIN detected: $pin")
+
+        // Check if we should auto-navigate or show PIN selection
+        checkAutoNavigate()
     }
     
     /**
@@ -519,7 +538,147 @@ class ScannerActivity : AppCompatActivity() {
 
         return false
     }
-    
+
+    /**
+     * Check if we have a valid card number and should show PIN confirmation.
+     * Always shows PIN confirmation dialog when card number is valid and at least one PIN detected.
+     */
+    private fun checkAutoNavigate() {
+        // Don't show dialog if already navigated
+        if (hasAutoNavigated) return
+
+        val cardNumber = detectedBarcode ?: return
+
+        // Check if card number matches expected length for market type
+        val isValidCardLength = when (marketType) {
+            MarketType.REWE -> cardNumber.length == 13
+            MarketType.ALDI, MarketType.LIDL -> cardNumber.length == 20
+        }
+
+        if (!isValidCardLength) {
+            Log.d(TAG, "Card number length ${cardNumber.length} doesn't match expected for $marketType")
+            return
+        }
+
+        // If we have at least one PIN, show the confirmation dialog
+        if (detectedPins.isNotEmpty()) {
+            if (pinSelectionDialog == null) {
+                Log.d(TAG, "Valid card + PIN(s) detected, showing confirmation dialog")
+                showPinSelectionDialog()
+            } else {
+                // Dialog already showing, update it with new PINs
+                updatePinSelectionDialog()
+            }
+        }
+    }
+
+    /**
+     * Show dialog to let user confirm/select PIN or enter manually.
+     * Scanning continues while dialog is open.
+     */
+    private fun showPinSelectionDialog() {
+        if (pinSelectionDialog != null) return
+
+        val binding = DialogPinSelectionBinding.inflate(layoutInflater)
+        pinSelectionDialogBinding = binding
+
+        // Add PIN buttons for each detected PIN
+        addPinButtonsToDialog(binding)
+
+        // Setup manual PIN entry
+        binding.btnUseManualPin.setOnClickListener {
+            val manualPin = binding.etManualPin.text.toString()
+            if (manualPin.length == 4 && manualPin.all { it.isDigit() }) {
+                selectPinAndNavigate(manualPin)
+            } else {
+                binding.tilManualPin.error = getString(R.string.invalid_pin)
+            }
+        }
+
+        pinSelectionDialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.select_pin_title)
+            .setView(binding.root)
+            .setNegativeButton(R.string.cancel) { dialog, _ ->
+                dialog.dismiss()
+            }
+            .setOnDismissListener {
+                pinSelectionDialog = null
+                pinSelectionDialogBinding = null
+            }
+            .create()
+
+        pinSelectionDialog?.show()
+    }
+
+    /**
+     * Add PIN buttons to the dialog for each detected PIN.
+     */
+    private fun addPinButtonsToDialog(binding: DialogPinSelectionBinding) {
+        binding.llPinOptions.removeAllViews()
+
+        for (pin in detectedPins) {
+            val button = MaterialButton(this).apply {
+                text = pin
+                textSize = 18f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = resources.getDimensionPixelSize(R.dimen.spacing_sm)
+                }
+                setOnClickListener {
+                    selectPinAndNavigate(pin)
+                }
+            }
+            binding.llPinOptions.addView(button)
+        }
+    }
+
+    /**
+     * Update the PIN selection dialog with newly detected PINs.
+     * Only adds new PINs - existing ones stay in their positions.
+     */
+    private fun updatePinSelectionDialog() {
+        val binding = pinSelectionDialogBinding ?: return
+
+        // Count current buttons
+        val currentButtonCount = binding.llPinOptions.childCount
+
+        // Add buttons only for new PINs (those beyond current count)
+        val pinList = detectedPins.toList()
+        for (i in currentButtonCount until pinList.size) {
+            val pin = pinList[i]
+            val button = MaterialButton(this).apply {
+                text = pin
+                textSize = 18f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = resources.getDimensionPixelSize(R.dimen.spacing_sm)
+                }
+                setOnClickListener {
+                    selectPinAndNavigate(pin)
+                }
+            }
+            binding.llPinOptions.addView(button)
+            Log.d(TAG, "Added new PIN button to dialog: $pin")
+        }
+    }
+
+    /**
+     * Select the given PIN and navigate to confirmation.
+     */
+    private fun selectPinAndNavigate(pin: String) {
+        detectedPin = pin
+        hasAutoNavigated = true
+        pinSelectionDialog?.dismiss()
+        pinSelectionDialog = null
+        pinSelectionDialogBinding = null
+        updateUI()
+        navigateToConfirmation()
+    }
+
     private fun updateUI() {
         // Card is always visible, but content visibility depends on detection
         binding.cardDetected.visibility = View.VISIBLE
@@ -779,6 +938,9 @@ class ScannerActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
+        pinSelectionDialog?.dismiss()
+        pinSelectionDialog = null
+        pinSelectionDialogBinding = null
         cameraExecutor.shutdown()
         barcodeScanner.close()
         textRecognizer.close()
