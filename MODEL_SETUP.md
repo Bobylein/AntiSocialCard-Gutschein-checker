@@ -118,11 +118,7 @@ If you get an access denied error when downloading from Hugging Face:
 
 ## Testing
 
-The test suite includes:
-- `testAldiCaptcha1()` - Tests recognition on `TestCaptchas/aldi_captcha1.png`
-- `testAldiCaptcha2()` - Tests recognition on `TestCaptchas/aldi_captcha2.png`
-- `testAllCaptchas()` - Tests all captcha images in the TestCaptchas folder
-- `testModelInitialization()` - Verifies model loads correctly
+CAPTCHA OCR verification is handled inside the Android test suites (`app/src/test` and `app/src/androidTest`). Python-based fixtures and desktop test runners now live in a separate project.
 
 ## Notes
 
@@ -130,4 +126,3 @@ The test suite includes:
 - Input size may need adjustment based on the specific model variant
 - Output format may vary - check model card on Hugging Face for details
 - The postprocessing logic may need tuning based on the actual model output
-

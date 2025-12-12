@@ -44,7 +44,6 @@ An Android application for checking gift card balances by scanning barcodes and 
 - `app/src/main/assets/js/` - Retailer-specific JavaScript for form fill, submit, and balance extraction
 - `app/src/main/assets/models/` - Bundled ONNX CAPTCHA model used for auto-solving
 - `app/src/test` and `app/src/androidTest` - JVM/Robolectric and instrumented test suites
-- `TestCaptchas/`, `captcha_models/`, `run_tests.sh` - Python helpers and fixtures for CAPTCHA OCR validation
 - `documentation/` - Additional technical documentation
 
 ## Building
@@ -91,7 +90,6 @@ The release APK will be generated at: `app/build/outputs/apk/release/app-release
 
 - JVM/Robolectric: `./gradlew testDebugUnitTest`
 - Instrumented (requires device/emulator): `./gradlew connectedAndroidTest`
-- CAPTCHA OCR validation on your PC: `./setup_test_env.sh && ./run_tests.sh` (uses `TestCaptchas/` fixtures; add `--no-download` to skip model downloads)
 
 ## Architecture
 

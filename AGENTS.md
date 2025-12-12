@@ -5,7 +5,7 @@
 - `app/src/main/res/` UI layouts, themes, and overlay drawables.
 - `app/src/main/assets/js/` retailer-specific form fill/submit/balance scripts; `assets/models/` holds bundled ONNX CAPTCHA model.
 - Tests live in `app/src/test` (unit/Robolectric) and `app/src/androidTest` (instrumented, Hilt-enabled).
-- Python CAPTCHA helpers: `test_captcha_models.py`, `run_tests.sh`, `TestCaptchas/`, and downloaded models in `captcha_models/`.
+- Python CAPTCHA helpers now live in a separate project (not in this repo).
 - Additional docs in `documentation/`; helper scripts (logs/tests/keystore) sit in the repo root.
 
 ## Build, Test, and Development Commands
@@ -13,7 +13,6 @@
 - `./gradlew installDebug` installs the debug build on a connected device/emulator.
 - `./gradlew assembleRelease` builds the release APK (requires `app/keystore.properties`; see `setup_keystore.sh` or the `.template`).
 - `./gradlew testDebugUnitTest` runs JVM/Robolectric unit tests; `./gradlew connectedAndroidTest` runs instrumented tests on a device/emulator.
-- CAPTCHA OCR tests: `./setup_test_env.sh && ./run_tests.sh` (downloads models to `captcha_models/`); manual option `python test_captcha_models.py --no-download`.
 
 ## Coding Style & Naming Conventions
 - Kotlin/Android style: 4-space indent, favor null-safety, use ViewBinding instead of `findViewById`, keep Hilt injections scoped to activities/fragments.
@@ -24,7 +23,7 @@
 ## Testing Guidelines
 - Cover new logic with unit tests in `app/src/test`; prefer Robolectric when Android APIs are involved.
 - For WebView/Camera/Hilt flows, add instrumented cases in `app/src/androidTest` and run `connectedAndroidTest`.
-- CAPTCHA/OCR changes: refresh fixtures in `TestCaptchas/` and rerun the Python suite; commit updated assets when behavior changes.
+- CAPTCHA/OCR changes: verify within Android tests; Python-based OCR tooling lives externally.
 
 ## Commit & Pull Request Guidelines
 - Follow existing history: `Feature: ...`, `Fix: ...`, `Chore: ...` with imperative subject.
