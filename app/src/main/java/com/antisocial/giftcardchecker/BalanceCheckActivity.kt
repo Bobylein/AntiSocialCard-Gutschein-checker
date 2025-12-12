@@ -134,7 +134,6 @@ class BalanceCheckActivity : AppCompatActivity() {
                 showLoading(true)
                 binding.webView.visibility = View.GONE
                 binding.resultCard.visibility = View.GONE
-                binding.tvCaptchaInstruction.visibility = View.GONE
                 binding.buttonsLayout.visibility = View.GONE
             }
             is BalanceCheckState.FillingForm -> {
@@ -144,21 +143,18 @@ class BalanceCheckActivity : AppCompatActivity() {
             is BalanceCheckState.SolvingCaptcha -> {
                 showLoading(true)
                 binding.tvLoadingText.text = getString(R.string.captcha_solving)
-                binding.tvCaptchaInstruction.visibility = View.GONE
             }
             is BalanceCheckState.WaitingForCaptcha -> {
                 showLoading(false)
                 binding.webView.visibility = View.VISIBLE
-                binding.tvCaptchaInstruction.visibility = View.VISIBLE
-                binding.tvCaptchaInstruction.text = getString(R.string.captcha_instruction)
                 binding.buttonsLayout.visibility = View.VISIBLE
                 binding.btnScanAnother.text = getString(R.string.done)
                 binding.btnScanAnother.setOnClickListener { finish() }
+                Toast.makeText(this, getString(R.string.captcha_instruction), Toast.LENGTH_LONG).show()
             }
             is BalanceCheckState.CheckingBalance -> {
                 showLoading(true)
                 binding.tvLoadingText.text = getString(R.string.balance_retrieving)
-                binding.tvCaptchaInstruction.visibility = View.GONE
             }
             is BalanceCheckState.Success -> {
                 showResult(state.result)
@@ -1082,17 +1078,16 @@ class BalanceCheckActivity : AppCompatActivity() {
     private fun showCaptchaMode() {
         showLoading(false)
         binding.webView.visibility = View.VISIBLE
-        binding.tvCaptchaInstruction.visibility = View.VISIBLE
-        binding.tvCaptchaInstruction.text = getString(R.string.captcha_instruction_short)
         
         // Show buttons for manual CAPTCHA solving
         binding.buttonsLayout.visibility = View.VISIBLE
         binding.btnScanAnother.text = getString(R.string.check_balance_button)
         binding.btnScanAnother.setOnClickListener {
-            binding.tvCaptchaInstruction.visibility = View.GONE
             showLoading(true)
             submitForm()
         }
+
+        Toast.makeText(this, getString(R.string.captcha_instruction_short), Toast.LENGTH_LONG).show()
     }
 
     private fun showLoading(show: Boolean) {
@@ -1107,7 +1102,6 @@ class BalanceCheckActivity : AppCompatActivity() {
         binding.webView.visibility = View.GONE
         binding.resultCard.visibility = View.VISIBLE
         binding.buttonsLayout.visibility = View.VISIBLE
-        binding.tvCaptchaInstruction.visibility = View.GONE
 
         // Reset button
         binding.btnScanAnother.text = getString(R.string.scan_another)
@@ -1142,7 +1136,6 @@ class BalanceCheckActivity : AppCompatActivity() {
         binding.webView.visibility = View.GONE
         binding.resultCard.visibility = View.VISIBLE
         binding.buttonsLayout.visibility = View.VISIBLE
-        binding.tvCaptchaInstruction.visibility = View.GONE
 
         // Reset button
         binding.btnScanAnother.text = getString(R.string.scan_another)
@@ -1455,11 +1448,10 @@ class BalanceCheckActivity : AppCompatActivity() {
     private fun showManualSubmitFallback() {
         Log.d(TAG, "Showing manual submit fallback button")
 
-        binding.tvCaptchaInstruction.text =
-        getString(R.string.captcha_instruction_short) + "\n\n" +
+        val fallbackMessage = getString(R.string.captcha_instruction_short) + "\n\n" +
             getString(R.string.auto_detection_not_possible) + "\n" +
             getString(R.string.captcha_submit_instruction)
-        binding.tvCaptchaInstruction.visibility = View.VISIBLE
+        Toast.makeText(this, fallbackMessage, Toast.LENGTH_LONG).show()
 
         // Change button to manual submit
         binding.btnScanAnother.text = getString(R.string.submit)
@@ -1526,14 +1518,62 @@ class BalanceCheckActivity : AppCompatActivity() {
         // Get CAPTCHA field coordinates and simulate touch
         val script = """
             (function() {
+                function scrollElementIntoView(el) {
+                    if (!el) return;
+                    try {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } catch(e) {}
+                }
+
+                function findCaptchaInput(doc) {
+                    doc = doc || document;
+                    var selectors = [
+                        'input[name="input"]',
+                        'input[name="captcha"]',
+                        'input[name*="captcha" i]',
+                        'input[id*="captcha" i]',
+                        'input[aria-label*="captcha" i]',
+                        'input[placeholder*="captcha" i]',
+                        'input[name*="sicher" i]',
+                        'input[placeholder*="sicherheits" i]',
+                        'input[name*="code" i]'
+                    ];
+
+                    for (var i = 0; i < selectors.length; i++) {
+                        var el = doc.querySelector(selectors[i]);
+                        if (el) return el;
+                    }
+
+                    var labels = doc.querySelectorAll('label');
+                    for (var j = 0; j < labels.length; j++) {
+                        var text = (labels[j].textContent || '').toLowerCase();
+                        if (text.indexOf('captcha') !== -1 ||
+                            text.indexOf('sicherheits') !== -1 ||
+                            text.indexOf('prüfcode') !== -1 ||
+                            text.indexOf('pruefcode') !== -1 ||
+                            text.indexOf('security') !== -1 ||
+                            text.indexOf('code eingeben') !== -1) {
+                            var forAttr = labels[j].getAttribute('for');
+                            if (forAttr) {
+                                var labeled = doc.getElementById(forAttr);
+                                if (labeled) return labeled;
+                            }
+                            var nestedInput = labels[j].parentElement ? labels[j].parentElement.querySelector('input') : null;
+                            if (nestedInput) return nestedInput;
+                        }
+                    }
+
+                    return null;
+                }
+
                 function getCaptchaCoordinates() {
                     // Try to find CAPTCHA input in main document
-                    var captchaInput = document.querySelector('input[name="input"]');
+                    var captchaInput = findCaptchaInput(document);
                     
                     if (captchaInput) {
                         try {
                             // Scroll into view first
-                            captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            scrollElementIntoView(captchaInput);
                             
                             // Get bounding rectangle
                             var rect = captchaInput.getBoundingClientRect();
@@ -1558,10 +1598,10 @@ class BalanceCheckActivity : AppCompatActivity() {
                                 var iframe = iframes[i];
                                 var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                                 if (iframeDoc) {
-                                    var iframeCaptcha = iframeDoc.querySelector('input[name="input"]');
+                                    var iframeCaptcha = findCaptchaInput(iframeDoc);
                                     if (iframeCaptcha) {
                                         // Scroll into view
-                                        iframeCaptcha.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        scrollElementIntoView(iframeCaptcha);
                                         
                                         // Get iframe position
                                         var iframeRect = iframe.getBoundingClientRect();
@@ -1598,7 +1638,7 @@ class BalanceCheckActivity : AppCompatActivity() {
                     
                     // Also try JavaScript focus as backup
                     setTimeout(function() {
-                        var captchaInput = document.querySelector('input[name="input"]');
+                        var captchaInput = findCaptchaInput(document);
                         if (captchaInput) {
                             captchaInput.focus();
                             captchaInput.click();
@@ -2023,4 +2063,3 @@ class BalanceCheckActivity : AppCompatActivity() {
         private const val MAX_ATTEMPTS = 5
     }
 }
-

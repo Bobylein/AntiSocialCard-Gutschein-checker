@@ -216,25 +216,7 @@
 
     </LinearLayout>
 
-    <!-- Instruction text for CAPTCHA (visible when needed) -->
-    <TextView
-        android:id="@+id/tvCaptchaInstruction"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_margin="@dimen/spacing_md"
-        android:background="@color/warning"
-        android:gravity="center"
-        android:padding="@dimen/spacing_sm"
-        android:text="Please solve the CAPTCHA in the form above, then tap 'Check Balance'"
-        android:textColor="@color/on_primary"
-        android:textSize="@dimen/text_caption"
-        android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@id/buttonsLayout"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
 </androidx.constraintlayout.widget.ConstraintLayout>
-
 
 
 
