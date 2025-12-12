@@ -117,3 +117,4 @@ captcha_models/
 *.onnx
 
 Card-Examples/
+__pycache__/
