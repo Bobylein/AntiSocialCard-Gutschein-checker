@@ -25,9 +25,9 @@ class SettingsPreferences @Inject constructor(
 
     /**
      * Whether automatic CAPTCHA solving is enabled.
-     * Default: false (manual CAPTCHA entry)
+     * Default: true (automatic solving enabled)
      */
     var autoCaptchaEnabled: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_CAPTCHA_ENABLED, false)
+        get() = prefs.getBoolean(KEY_AUTO_CAPTCHA_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CAPTCHA_ENABLED, value).apply()
 }

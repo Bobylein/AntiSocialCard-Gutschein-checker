@@ -37,8 +37,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
-        // Website button click
-        binding.btnWebsite.setOnClickListener {
+        // Support button click
+        binding.btnSupport.setOnClickListener {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(SUPPORT_URL))
             startActivity(intent)
         }
@@ -129,5 +129,4 @@ class MainActivity : AppCompatActivity() {
         preloadWebView = null
     }
 }
-
 

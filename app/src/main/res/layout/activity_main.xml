@@ -7,15 +7,15 @@
     android:background="@color/background"
     tools:context=".MainActivity">
 
-    <!-- Website Button -->
+    <!-- Support Button -->
     <Button
-        android:id="@+id/btnWebsite"
+        android:id="@+id/btnSupport"
         android:layout_width="wrap_content"
         android:layout_height="48dp"
         android:layout_marginTop="@dimen/spacing_sm"
         android:layout_marginEnd="@dimen/spacing_sm"
         android:background="?attr/selectableItemBackground"
-        android:text="@string/website"
+        android:text="@string/support"
         android:textAllCaps="false"
         android:textColor="@color/on_background"
         app:layout_constraintEnd_toStartOf="@id/btnSettings"
@@ -52,7 +52,7 @@
         app:layout_constraintBottom_toTopOf="@id/cardAldi"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnSupport"
         app:layout_constraintVertical_chainStyle="spread"
         app:layout_constraintVertical_weight="1">
 
@@ -131,6 +131,5 @@
     </androidx.cardview.widget.CardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
-
 
 

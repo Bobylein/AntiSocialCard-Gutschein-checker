@@ -11,29 +11,29 @@
     
     <!-- Scanner Activity -->
     <string name="scanner_title">Barcode scannen</string>
-    <string name="scanner_instruction">Kamera auf den Barcode Ihrer Geschenkkarte richten</string>
+    <string name="scanner_instruction">Richte die Kamera auf den Barcode deiner Geschenkkarte</string>
     <string name="pin_here_above">PIN hier oben</string>
     <string name="scanner_permission_denied">Kamera-Berechtigung ist erforderlich, um Barcodes zu scannen</string>
     <string name="scanner_no_barcode">Kein Barcode erkannt</string>
-    <string name="please_scan_barcode">Bitte scannen Sie den Barcode</string>
+    <string name="please_scan_barcode">Bitte scanne den Barcode</string>
     <string name="barcode_label">Barcode: %s</string>
     <string name="pin_label">PIN: %s</string>
     <string name="verify_data">Daten überprüfen</string>
     <string name="select_pin_title">PIN bestätigen</string>
-    <string name="select_pin_instruction">Wählen Sie die erkannte PIN oder geben Sie sie manuell ein:</string>
+    <string name="select_pin_instruction">Wähle die erkannte PIN oder gib sie manuell ein:</string>
     <string name="enter_pin_manually">Oder PIN manuell eingeben:</string>
     <string name="use_pin">OK</string>
     <string name="cancel">Abbrechen</string>
 
     <!-- PIN Entry Activity -->
     <string name="pin_entry_title">PIN eingeben</string>
-    <string name="pin_entry_instruction">Geben Sie die PIN von Ihrer Geschenkkarte ein</string>
+    <string name="pin_entry_instruction">Gib die PIN deiner Geschenkkarte ein</string>
     <string name="pin_hint">PIN</string>
     <string name="card_number_label">Kartennummer: %s</string>
     <string name="use_ocr">PIN mit Kamera scannen</string>
     <string name="enter_manually">Manuell eingeben</string>
     <string name="continue_button">Weiter</string>
-    <string name="ocr_instruction">Kamera auf die PIN auf Ihrer Karte richten</string>
+    <string name="ocr_instruction">Richte die Kamera auf die PIN auf deiner Karte</string>
     <string name="ocr_detected">Erkannt: %s</string>
     <string name="ocr_use_this">Diese PIN verwenden</string>
     <string name="ocr_retry">Wiederholen</string>
@@ -47,27 +47,28 @@
     <string name="balance_result">Guthaben: %s</string>
     <string name="balance_error">Fehler beim Prüfen des Guthabens</string>
     <string name="balance_invalid_card">Ungültige Kartennummer oder PIN</string>
-    <string name="balance_network_error">Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.</string>
+    <string name="balance_network_error">Netzwerkfehler. Bitte überprüfe deine Verbindung.</string>
     <string name="scan_another">Weitere Karte scannen</string>
     <string name="done">Fertig</string>
     <string name="form_filling_attempt">Formular wird ausgefüllt (Versuch %d)…</string>
     <string name="balance_retrieving">Guthaben wird abgerufen…</string>
-    <string name="captcha_instruction">Die Gutscheinnummer und PIN wurden automatisch ausgefüllt.\n\nBitte lösen Sie das CAPTCHA und klicken Sie dann auf \'Guthabenabfrage\'.</string>
-    <string name="captcha_instruction_short">Bitte lösen Sie das CAPTCHA und klicken Sie dann auf \'Guthabenabfrage\'.\n\nDie Gutscheinnummer und PIN wurden bereits automatisch ausgefüllt.</string>
+    <string name="captcha_instruction">Die Gutscheinnummer und PIN wurden automatisch ausgefüllt.\n\nBitte löse das CAPTCHA und klicke dann auf \'Guthabenabfrage\'.</string>
+    <string name="captcha_instruction_short">Bitte löse das CAPTCHA und klicke dann auf \'Guthabenabfrage\'.\n\nDie Gutscheinnummer und PIN wurden bereits automatisch ausgefüllt.</string>
     <string name="check_balance_button">Guthaben prüfen</string>
     <string name="balance_found">Guthaben gefunden</string>
     <string name="show_webview">WebView anzeigen</string>
     <string name="card_label">Karte: %s</string>
     <string name="submit">Absenden</string>
     <string name="auto_detection_not_possible">Automatische Erkennung nicht möglich.</string>
-    <string name="captcha_submit_instruction">Bitte lösen Sie das CAPTCHA und tippen Sie dann auf \'Absenden\'.</string>
-    <string name="no_pin_detected">Keine PIN erkannt. Bitte versuchen Sie es erneut. (Gefunden: %s…)</string>
+    <string name="captcha_submit_instruction">Bitte löse das CAPTCHA und tippe dann auf \'Absenden\'.</string>
+    <string name="no_pin_detected">Keine PIN erkannt. Bitte versuche es erneut. (Gefunden: %s…)</string>
     <string name="card_number_required">Kartennummer ist erforderlich</string>
     <string name="no_internet_connection">Keine Internetverbindung</string>
     
     <!-- Settings -->
     <string name="settings">Einstellungen</string>
     <string name="website">Website</string>
+    <string name="support">Support</string>
     <string name="back">Zurück</string>
     <string name="auto_captcha_title">Automatische CAPTCHA-Erkennung</string>
     <string name="auto_captcha_description">CAPTCHA automatisch mit "KI" lösen</string>
@@ -88,4 +89,3 @@
     <string name="service_unavailable">Service vorübergehend nicht verfügbar</string>
     <string name="balance_label">Guthaben: %s</string>
 </resources>
-
